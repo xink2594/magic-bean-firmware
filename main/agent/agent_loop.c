@@ -6,6 +6,8 @@
 #include "memory/session_mgr.h"
 #include "tools/tool_registry.h"
 
+#include "display/oled_ssd1306.h"
+
 #include <string.h>
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
@@ -16,7 +18,7 @@
 
 static const char *TAG = "agent";
 
-#define TOOL_OUTPUT_SIZE  (8 * 1024)
+#define TOOL_OUTPUT_SIZE (8 * 1024)
 
 /* Build the assistant content array from llm_response_t for the messages history.
  * Returns a cJSON array with text and tool_use blocks. */
@@ -25,7 +27,8 @@ static cJSON *build_assistant_content(const llm_response_t *resp)
     cJSON *content = cJSON_CreateArray();
 
     /* Text block */
-    if (resp->text && resp->text_len > 0) {
+    if (resp->text && resp->text_len > 0)
+    {
         cJSON *text_block = cJSON_CreateObject();
         cJSON_AddStringToObject(text_block, "type", "text");
         cJSON_AddStringToObject(text_block, "text", resp->text);
@@ -33,7 +36,8 @@ static cJSON *build_assistant_content(const llm_response_t *resp)
     }
 
     /* Tool use blocks */
-    for (int i = 0; i < resp->call_count; i++) {
+    for (int i = 0; i < resp->call_count; i++)
+    {
         const llm_tool_call_t *call = &resp->calls[i];
         cJSON *tool_block = cJSON_CreateObject();
         cJSON_AddStringToObject(tool_block, "type", "tool_use");
@@ -41,9 +45,12 @@ static cJSON *build_assistant_content(const llm_response_t *resp)
         cJSON_AddStringToObject(tool_block, "name", call->name);
 
         cJSON *input = cJSON_Parse(call->input);
-        if (input) {
+        if (input)
+        {
             cJSON_AddItemToObject(tool_block, "input", input);
-        } else {
+        }
+        else
+        {
             cJSON_AddItemToObject(tool_block, "input", cJSON_CreateObject());
         }
 
@@ -55,7 +62,8 @@ static cJSON *build_assistant_content(const llm_response_t *resp)
 
 static void json_set_string(cJSON *obj, const char *key, const char *value)
 {
-    if (!obj || !key || !value) {
+    if (!obj || !key || !value)
+    {
         return;
     }
     cJSON_DeleteItemFromObject(obj, key);
@@ -64,12 +72,14 @@ static void json_set_string(cJSON *obj, const char *key, const char *value)
 
 static void append_turn_context_prompt(char *prompt, size_t size, const mimi_msg_t *msg)
 {
-    if (!prompt || size == 0 || !msg) {
+    if (!prompt || size == 0 || !msg)
+    {
         return;
     }
 
     size_t off = strnlen(prompt, size - 1);
-    if (off >= size - 1) {
+    if (off >= size - 1)
+    {
         return;
     }
 
@@ -83,23 +93,27 @@ static void append_turn_context_prompt(char *prompt, size_t size, const mimi_msg
         msg->channel[0] ? msg->channel : "(unknown)",
         msg->chat_id[0] ? msg->chat_id : "(empty)");
 
-    if (n < 0 || (size_t)n >= (size - off)) {
+    if (n < 0 || (size_t)n >= (size - off))
+    {
         prompt[size - 1] = '\0';
     }
 }
 
 static char *patch_tool_input_with_context(const llm_tool_call_t *call, const mimi_msg_t *msg)
 {
-    if (!call || !msg || strcmp(call->name, "cron_add") != 0) {
+    if (!call || !msg || strcmp(call->name, "cron_add") != 0)
+    {
         return NULL;
     }
 
     cJSON *root = cJSON_Parse(call->input ? call->input : "{}");
-    if (!root || !cJSON_IsObject(root)) {
+    if (!root || !cJSON_IsObject(root))
+    {
         cJSON_Delete(root);
         root = cJSON_CreateObject();
     }
-    if (!root) {
+    if (!root)
+    {
         return NULL;
     }
 
@@ -108,26 +122,31 @@ static char *patch_tool_input_with_context(const llm_tool_call_t *call, const mi
     cJSON *channel_item = cJSON_GetObjectItem(root, "channel");
     const char *channel = cJSON_IsString(channel_item) ? channel_item->valuestring : NULL;
 
-    if ((!channel || channel[0] == '\0') && msg->channel[0] != '\0') {
+    if ((!channel || channel[0] == '\0') && msg->channel[0] != '\0')
+    {
         json_set_string(root, "channel", msg->channel);
         channel = msg->channel;
         changed = true;
     }
 
     if (channel && strcmp(channel, MIMI_CHAN_TELEGRAM) == 0 &&
-        strcmp(msg->channel, MIMI_CHAN_TELEGRAM) == 0 && msg->chat_id[0] != '\0') {
+        strcmp(msg->channel, MIMI_CHAN_TELEGRAM) == 0 && msg->chat_id[0] != '\0')
+    {
         cJSON *chat_item = cJSON_GetObjectItem(root, "chat_id");
         const char *chat_id = cJSON_IsString(chat_item) ? chat_item->valuestring : NULL;
-        if (!chat_id || chat_id[0] == '\0' || strcmp(chat_id, "cron") == 0) {
+        if (!chat_id || chat_id[0] == '\0' || strcmp(chat_id, "cron") == 0)
+        {
             json_set_string(root, "chat_id", msg->chat_id);
             changed = true;
         }
     }
 
     char *patched = NULL;
-    if (changed) {
+    if (changed)
+    {
         patched = cJSON_PrintUnformatted(root);
-        if (patched) {
+        if (patched)
+        {
             ESP_LOGI(TAG, "Patched cron_add target to %s:%s", msg->channel, msg->chat_id);
         }
     }
@@ -142,11 +161,13 @@ static cJSON *build_tool_results(const llm_response_t *resp, const mimi_msg_t *m
 {
     cJSON *content = cJSON_CreateArray();
 
-    for (int i = 0; i < resp->call_count; i++) {
+    for (int i = 0; i < resp->call_count; i++)
+    {
         const llm_tool_call_t *call = &resp->calls[i];
         const char *tool_input = call->input ? call->input : "{}";
         char *patched_input = patch_tool_input_with_context(call, msg);
-        if (patched_input) {
+        if (patched_input)
+        {
             tool_input = patched_input;
         }
 
@@ -177,7 +198,8 @@ static void agent_loop_task(void *arg)
     char *history_json = heap_caps_calloc(1, MIMI_LLM_STREAM_BUF_SIZE, MALLOC_CAP_SPIRAM);
     char *tool_output = heap_caps_calloc(1, TOOL_OUTPUT_SIZE, MALLOC_CAP_SPIRAM);
 
-    if (!system_prompt || !history_json || !tool_output) {
+    if (!system_prompt || !history_json || !tool_output)
+    {
         ESP_LOGE(TAG, "Failed to allocate PSRAM buffers");
         vTaskDelete(NULL);
         return;
@@ -185,10 +207,17 @@ static void agent_loop_task(void *arg)
 
     const char *tools_json = tool_registry_get_tools_json();
 
-    while (1) {
+    while (1)
+    {
+        // 每次循环开始阻塞等待新消息前，确保屏幕处于待机状态
+        oled_set_state(UI_STATE_IDLE);
         mimi_msg_t msg;
         esp_err_t err = message_bus_pop_inbound(&msg, UINT32_MAX);
-        if (err != ESP_OK) continue;
+        if (err != ESP_OK)
+            continue;
+
+        // 成功收到用户消息，开始构建 Prompt 和调用 LLM，切换为思考状态
+        oled_set_state(UI_STATE_THINKING);
 
         ESP_LOGI(TAG, "Processing message from %s:%s", msg.channel, msg.chat_id);
 
@@ -202,7 +231,8 @@ static void agent_loop_task(void *arg)
                                  MIMI_LLM_STREAM_BUF_SIZE, MIMI_AGENT_MAX_HISTORY);
 
         cJSON *messages = cJSON_Parse(history_json);
-        if (!messages) messages = cJSON_CreateArray();
+        if (!messages)
+            messages = cJSON_CreateArray();
 
         /* 3. Append current user message */
         cJSON *user_msg = cJSON_CreateObject();
@@ -215,19 +245,25 @@ static void agent_loop_task(void *arg)
         int iteration = 0;
         bool sent_working_status = false;
 
-        while (iteration < MIMI_AGENT_MAX_TOOL_ITER) {
+        while (iteration < MIMI_AGENT_MAX_TOOL_ITER)
+        {
             /* Send "working" indicator before each API call */
 #if MIMI_AGENT_SEND_WORKING_STATUS
-            if (!sent_working_status && strcmp(msg.channel, MIMI_CHAN_SYSTEM) != 0) {
+            if (!sent_working_status && strcmp(msg.channel, MIMI_CHAN_SYSTEM) != 0)
+            {
                 mimi_msg_t status = {0};
                 strncpy(status.channel, msg.channel, sizeof(status.channel) - 1);
                 strncpy(status.chat_id, msg.chat_id, sizeof(status.chat_id) - 1);
                 status.content = strdup("\xF0\x9F\x90\xB1mimi is working...");
-                if (status.content) {
-                    if (message_bus_push_outbound(&status) != ESP_OK) {
+                if (status.content)
+                {
+                    if (message_bus_push_outbound(&status) != ESP_OK)
+                    {
                         ESP_LOGW(TAG, "Outbound queue full, drop working status");
                         free(status.content);
-                    } else {
+                    }
+                    else
+                    {
                         sent_working_status = true;
                     }
                 }
@@ -237,14 +273,17 @@ static void agent_loop_task(void *arg)
             llm_response_t resp;
             err = llm_chat_tools(system_prompt, messages, tools_json, &resp);
 
-            if (err != ESP_OK) {
+            if (err != ESP_OK)
+            {
                 ESP_LOGE(TAG, "LLM call failed: %s", esp_err_to_name(err));
                 break;
             }
 
-            if (!resp.tool_use) {
+            if (!resp.tool_use)
+            {
                 /* Normal completion — save final text and break */
-                if (resp.text && resp.text_len > 0) {
+                if (resp.text && resp.text_len > 0)
+                {
                     final_text = strdup(resp.text);
                 }
                 llm_response_free(&resp);
@@ -273,46 +312,68 @@ static void agent_loop_task(void *arg)
         cJSON_Delete(messages);
 
         /* 5. Send response */
-        if (final_text && final_text[0]) {
+        if (final_text && final_text[0])
+        {
             /* Save to session (only user text + final assistant text) */
             esp_err_t save_user = session_append(msg.chat_id, "user", msg.content);
             esp_err_t save_asst = session_append(msg.chat_id, "assistant", final_text);
-            if (save_user != ESP_OK || save_asst != ESP_OK) {
+            if (save_user != ESP_OK || save_asst != ESP_OK)
+            {
                 ESP_LOGW(TAG, "Session save failed for chat %s (user=%s, assistant=%s)",
                          msg.chat_id,
                          esp_err_to_name(save_user),
                          esp_err_to_name(save_asst));
-            } else {
+            }
+            else
+            {
                 ESP_LOGI(TAG, "Session saved for chat %s", msg.chat_id);
             }
+
+            // 准备将最终回复推入发送队列，切换为说话/输出状态
+            oled_set_state(UI_STATE_SPEAKING);
 
             /* Push response to outbound */
             mimi_msg_t out = {0};
             strncpy(out.channel, msg.channel, sizeof(out.channel) - 1);
             strncpy(out.chat_id, msg.chat_id, sizeof(out.chat_id) - 1);
-            out.content = final_text;  /* transfer ownership */
+            out.content = final_text; /* transfer ownership */
             ESP_LOGI(TAG, "Queue final response to %s:%s (%d bytes)",
                      out.channel, out.chat_id, (int)strlen(final_text));
-            if (message_bus_push_outbound(&out) != ESP_OK) {
+            if (message_bus_push_outbound(&out) != ESP_OK)
+            {
                 ESP_LOGW(TAG, "Outbound queue full, drop final response");
                 free(final_text);
-            } else {
+            }
+            else
+            {
                 final_text = NULL;
             }
-        } else {
+
+            // 保持说话表情 1.5 秒，防止消息处理太快导致表情一闪而过
+            vTaskDelay(pdMS_TO_TICKS(1500));
+        }
+        else
+        {
             /* Error or empty response */
             free(final_text);
+            // 处理遇到错误的情况
+            oled_set_state(UI_STATE_ERROR);
+
             mimi_msg_t out = {0};
             strncpy(out.channel, msg.channel, sizeof(out.channel) - 1);
             strncpy(out.chat_id, msg.chat_id, sizeof(out.chat_id) - 1);
             out.content = strdup("Sorry, I encountered an error.");
-            if (out.content) {
-                if (message_bus_push_outbound(&out) != ESP_OK) {
+            if (out.content)
+            {
+                if (message_bus_push_outbound(&out) != ESP_OK)
+                {
                     ESP_LOGW(TAG, "Outbound queue full, drop error response");
                     free(out.content);
                 }
             }
         }
+        // 让错误表情停留
+        vTaskDelay(pdMS_TO_TICKS(1500));
 
         /* Free inbound message content */
         free(msg.content);
@@ -339,14 +400,16 @@ esp_err_t agent_loop_start(void)
         12 * 1024,
     };
 
-    for (size_t i = 0; i < (sizeof(stack_candidates) / sizeof(stack_candidates[0])); i++) {
+    for (size_t i = 0; i < (sizeof(stack_candidates) / sizeof(stack_candidates[0])); i++)
+    {
         uint32_t stack_size = stack_candidates[i];
         BaseType_t ret = xTaskCreatePinnedToCore(
             agent_loop_task, "agent_loop",
             stack_size, NULL,
             MIMI_AGENT_PRIO, NULL, MIMI_AGENT_CORE);
 
-        if (ret == pdPASS) {
+        if (ret == pdPASS)
+        {
             ESP_LOGI(TAG, "agent_loop task created with stack=%u bytes", (unsigned)stack_size);
             return ESP_OK;
         }

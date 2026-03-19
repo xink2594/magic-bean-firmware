@@ -6,6 +6,9 @@
 #include "tools/tool_cron.h"
 #include "tools/tool_gpio.h"
 
+// 1
+#include "tools/tool_rgb.h"
+
 /* RGB 工具函数 */
 extern esp_err_t tool_rgb_init(void);
 extern esp_err_t tool_rgb_execute(const char *input_json, char *output, size_t output_size);

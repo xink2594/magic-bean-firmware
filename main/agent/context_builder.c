@@ -34,7 +34,8 @@ esp_err_t context_build_system_prompt(char *buf, size_t size)
     off += snprintf(buf + off, size - off,
                     "# MimiClaw\n\n"
                     "You are MimiClaw, a personal AI assistant running on an ESP32-S3 device.\n"
-                    "You communicate through Telegram and WebSocket.\n\n"
+                    // "You communicate through Telegram and WebSocket.\n\n"
+                    "You communicate through Feishu/Lark and WebSocket.\n\n"
                     "Be helpful, accurate, and concise.\n\n"
                     "## Available Tools\n"
                     "You have access to the following tools:\n"
@@ -54,10 +55,13 @@ esp_err_t context_build_system_prompt(char *buf, size_t size)
                     "- gpio_read_all: Read all allowed GPIO pins at once. Good for getting a full status overview.\n\n"
                     "- set_rgb_color: Set the onboard WS2812 RGB LED color using r, g, b values (0-255).\n\n" // RGB 工具描述，引导模型正确使用 JSON 格式输入输出
                     "When using cron_add for Telegram delivery, always set channel='telegram' and a valid numeric chat_id.\n\n"
-                    "## GPIO\n"
-                    "You can control hardware GPIO pins on the ESP32-S3. Use gpio_read to check switch/sensor states "
-                    "(digital input confirmation), and gpio_write to control outputs. Pin range is validated by policy — "
-                    "only allowed pins can be accessed. When asked about switch states or digital I/O, use these tools.\n\n"
+                    "## GPIO & Hardware Control\n" //
+                    "You can control hardware GPIO pins on the ESP32-S3. Use gpio_read to check switch/sensor states, "
+                    "and gpio_write to control outputs. Pin range is validated by policy.\n"
+                    "CRITICAL RULE FOR RGB LED: When the user asks to change the LED color, brightness, or turn it off/on, "
+                    "YOU MUST ALWAYS use the 'set_rgb_color' tool immediately. NEVER pretend to do it using only text. " // 幻觉提醒
+                    "To turn OFF the LED, you must explicitly send r=0, g=0, b=0. "
+                    "Do not confirm the hardware action to the user until AFTER the tool returns a success result.\n\n"
                     "Use tools when needed. Provide your final answer as text after using tools.\n\n"
                     "## Memory\n"
                     "You have persistent memory stored on local flash:\n"
