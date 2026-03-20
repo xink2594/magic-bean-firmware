@@ -27,7 +27,6 @@
 #include "heartbeat/heartbeat.h"
 #include "skills/skill_loader.h"
 #include "onboard/wifi_onboard.h"
-#include "display/oled_ssd1306.h"
 
 static const char *TAG = "mimi";
 
@@ -173,9 +172,6 @@ void app_main(void)
     bool wifi_ok = false;
     if (wifi_err == ESP_OK)
     {
-        // 准备连接 WiFi，切换屏幕为 (o_o) WiFi...
-        oled_set_state(UI_STATE_WIFI_CONNECTING);
-
         ESP_LOGI(TAG, "Scanning nearby APs on boot...");
         wifi_manager_scan_and_print();
         ESP_LOGI(TAG, "Waiting for WiFi connection...");
@@ -193,15 +189,10 @@ void app_main(void)
             esp_sntp_setservername(1, "ntp.aliyun.com");
             esp_sntp_init();
             ESP_LOGI(TAG, "SNTP service initialized");
-
-            // 网络和时钟就绪，进入待机大眼睛模式 (^_^) Ready
-            oled_set_state(UI_STATE_IDLE);
         }
         else
         {
             ESP_LOGW(TAG, "WiFi connection timeout");
-            // 网络超时，显示错误状态
-            oled_set_state(UI_STATE_ERROR);
         }
     }
     else

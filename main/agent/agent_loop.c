@@ -6,8 +6,6 @@
 #include "memory/session_mgr.h"
 #include "tools/tool_registry.h"
 
-#include "display/oled_ssd1306.h"
-
 #include <string.h>
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
@@ -209,15 +207,10 @@ static void agent_loop_task(void *arg)
 
     while (1)
     {
-        // 每次循环开始阻塞等待新消息前，确保屏幕处于待机状态
-        oled_set_state(UI_STATE_IDLE);
         mimi_msg_t msg;
         esp_err_t err = message_bus_pop_inbound(&msg, UINT32_MAX);
         if (err != ESP_OK)
             continue;
-
-        // 成功收到用户消息，开始构建 Prompt 和调用 LLM，切换为思考状态
-        oled_set_state(UI_STATE_THINKING);
 
         ESP_LOGI(TAG, "Processing message from %s:%s", msg.channel, msg.chat_id);
 
@@ -329,9 +322,6 @@ static void agent_loop_task(void *arg)
                 ESP_LOGI(TAG, "Session saved for chat %s", msg.chat_id);
             }
 
-            // 准备将最终回复推入发送队列，切换为说话/输出状态
-            oled_set_state(UI_STATE_SPEAKING);
-
             /* Push response to outbound */
             mimi_msg_t out = {0};
             strncpy(out.channel, msg.channel, sizeof(out.channel) - 1);
@@ -356,8 +346,6 @@ static void agent_loop_task(void *arg)
         {
             /* Error or empty response */
             free(final_text);
-            // 处理遇到错误的情况
-            oled_set_state(UI_STATE_ERROR);
 
             mimi_msg_t out = {0};
             strncpy(out.channel, msg.channel, sizeof(out.channel) - 1);

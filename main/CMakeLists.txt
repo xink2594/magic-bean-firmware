@@ -25,7 +25,6 @@ idf_component_register(
         "tools/gpio_policy.c"
         "skills/skill_loader.c"
         "onboard/wifi_onboard.c"
-        "display/oled_ssd1306.c"
     INCLUDE_DIRS
         "."
     REQUIRES
