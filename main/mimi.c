@@ -143,10 +143,6 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(init_spiffs());
 
-    {
-        ESP_LOGE(TAG, "OLED initialization failed, but continuing system boot...");
-    }
-
     /* Initialize subsystems */
     ESP_ERROR_CHECK(message_bus_init());
     ESP_ERROR_CHECK(memory_store_init());

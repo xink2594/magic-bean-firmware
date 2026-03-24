@@ -16,8 +16,6 @@
 
 static const char *TAG = "agent";
 
-#define TOOL_OUTPUT_SIZE (8 * 1024)
-
 /* Build the assistant content array from llm_response_t for the messages history.
  * Returns a cJSON array with text and tool_use blocks. */
 static cJSON *build_assistant_content(const llm_response_t *resp)
@@ -339,8 +337,7 @@ static void agent_loop_task(void *arg)
                 final_text = NULL;
             }
 
-            // 保持说话表情 1.5 秒，防止消息处理太快导致表情一闪而过
-            vTaskDelay(pdMS_TO_TICKS(1500));
+            
         }
         else
         {
@@ -360,8 +357,7 @@ static void agent_loop_task(void *arg)
                 }
             }
         }
-        // 让错误表情停留
-        vTaskDelay(pdMS_TO_TICKS(1500));
+
 
         /* Free inbound message content */
         free(msg.content);
