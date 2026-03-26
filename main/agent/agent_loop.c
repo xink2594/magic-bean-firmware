@@ -309,12 +309,14 @@ static void agent_loop_task(void *arg)
 
         cJSON_Delete(messages);
 
-        /* 思考结束 --> 发呆状态 */
-        display_set_mood(0);
+        // vTaskDelay(pdMS_TO_TICKS(3000));
 
         /* 5. Send response */
         if (final_text && final_text[0])
         {
+            /* 准备回复 --> 开心状态 */
+            display_set_mood(2);
+
             /* Save to session (only user text + final assistant text) */
             esp_err_t save_user = session_append(msg.chat_id, "user", msg.content);
             esp_err_t save_asst = session_append(msg.chat_id, "assistant", final_text);
@@ -346,9 +348,17 @@ static void agent_loop_task(void *arg)
             {
                 final_text = NULL;
             }
+
+            /* 回复结束 --> 发呆状态 */
+            display_set_mood(0);
         }
         else
         {
+            /* 回复Error --> sad状态 */
+            display_set_mood(3);
+
+            vTaskDelay(pdMS_TO_TICKS(5000));
+
             /* Error or empty response */
             free(final_text);
 
@@ -364,6 +374,9 @@ static void agent_loop_task(void *arg)
                     free(out.content);
                 }
             }
+
+            /* 回复结束 --> 发呆状态 */
+            display_set_mood(0);
         }
 
         /* Free inbound message content */

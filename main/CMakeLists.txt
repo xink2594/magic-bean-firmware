@@ -27,6 +27,10 @@ idf_component_register(
         "skills/skill_loader.c"
         "onboard/wifi_onboard.c"
         "display/display_face.c"
+        "display/staticstate.c"
+        "display/buxue.c"
+        "display/sad.c"
+        "display/happy.c"
     INCLUDE_DIRS
         "."
     REQUIRES
