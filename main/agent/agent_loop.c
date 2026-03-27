@@ -316,6 +316,7 @@ static void agent_loop_task(void *arg)
         {
             /* 准备回复 --> 开心状态 */
             display_set_mood(2);
+            vTaskDelay(pdMS_TO_TICKS(10000));
 
             /* Save to session (only user text + final assistant text) */
             esp_err_t save_user = session_append(msg.chat_id, "user", msg.content);
@@ -357,7 +358,7 @@ static void agent_loop_task(void *arg)
             /* 回复Error --> sad状态 */
             display_set_mood(3);
 
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(10000));
 
             /* Error or empty response */
             free(final_text);
