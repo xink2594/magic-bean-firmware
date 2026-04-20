@@ -56,6 +56,7 @@ esp_err_t context_build_system_prompt(char *buf, size_t size)
                     "- set_rgb_color: Set the onboard WS2812 RGB LED color using r, g, b values (0-255).\n\n" // RGB 工具描述，引导模型正确使用 JSON 格式输入输出
                     "- get_weather_now: Get the real-time weather conditions and temperature.\n"
                     "- get_weather_forecast: Get the 3-day weather forecast (high/low temps, day/night conditions).\n"
+                    "- get_camera_image: Capture a photo using the onboard camera and upload it to the configured backend, returning the image URL.\n\n"
                     "When using cron_add for Telegram delivery, always set channel='telegram' and a valid numeric chat_id.\n\n"
                     "## GPIO & Hardware Control\n" //
                     "You can control hardware GPIO pins on the ESP32-S3. Use gpio_read to check switch/sensor states, "

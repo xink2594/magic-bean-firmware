@@ -9,6 +9,7 @@
 // 1
 #include "tools/tool_rgb.h"
 #include "tools/tool_weather.h"
+#include "tools/tool_camera.h"
 
 /* RGB 工具函数 */
 extern esp_err_t tool_rgb_init(void);
@@ -269,6 +270,17 @@ esp_err_t tool_registry_init(void)
         .execute = tool_weather_daily_execute,
     };
     register_tool(&w_forecast);
+
+    //
+    mimi_tool_t w_camera = {
+        .name = "get_camera_image",
+        .description = "Takes a photo of the user's plant, uploads it to the server, and returns the public URL.",
+        .input_schema_json =
+            "{\"type\":\"object\","
+            "\"properties\":{}}",
+        .execute = tool_camera_execute,
+    };
+    register_tool(&w_camera);
 
     build_tools_json();
 

@@ -28,7 +28,9 @@
 #include "skills/skill_loader.h"
 #include "onboard/wifi_onboard.h"
 
-#include "display/display_face.h"
+#include "tools/tool_camera.h"
+#include "tools/tool_rgb.h"
+#include "tools/tool_weather.h"
 
 static const char *TAG = "mimi";
 
@@ -147,8 +149,6 @@ void app_main(void)
 
     /* Initialize subsystems */
     ESP_ERROR_CHECK(message_bus_init());
-    /* Initialize display */
-    ESP_ERROR_CHECK(display_face_init());
 
     ESP_ERROR_CHECK(memory_store_init());
     ESP_ERROR_CHECK(skill_loader_init());
@@ -165,6 +165,8 @@ void app_main(void)
 
     /* Start Serial CLI first (works without WiFi) */
     ESP_ERROR_CHECK(serial_cli_init());
+
+    ESP_ERROR_CHECK(tool_camera_init()); // 初始化摄像头工具上下文，硬件按需启动
 
     /* Start WiFi */
     esp_err_t wifi_err = wifi_manager_start();
