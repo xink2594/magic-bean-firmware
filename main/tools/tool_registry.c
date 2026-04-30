@@ -6,10 +6,11 @@
 #include "tools/tool_cron.h"
 #include "tools/tool_gpio.h"
 
-// 1
+// new tools
 #include "tools/tool_rgb.h"
 #include "tools/tool_weather.h"
 #include "tools/tool_camera.h"
+#include "tools/tool_dht11.h"
 
 /* RGB 工具函数 */
 extern esp_err_t tool_rgb_init(void);
@@ -21,7 +22,7 @@ extern esp_err_t tool_rgb_execute(const char *input_json, char *output, size_t o
 
 static const char *TAG = "tools";
 
-#define MAX_TOOLS 16
+#define MAX_TOOLS 32
 
 static mimi_tool_t s_tools[MAX_TOOLS];
 static int s_tool_count = 0;
@@ -281,6 +282,20 @@ esp_err_t tool_registry_init(void)
         .execute = tool_camera_execute,
     };
     register_tool(&w_camera);
+
+    /* Register DHT11 tool */
+    tool_dht11_init();
+
+    mimi_tool_t dht11 = {
+        .name = "get_indoor_temperature",
+        .description = "Read the indoor temperature and humidity from a DHT11 sensor. Defaults to GPIO2 when pin is omitted.",
+        .input_schema_json =
+            "{\"type\":\"object\","
+            "\"properties\":{\"pin\":{\"type\":\"integer\",\"description\":\"Optional GPIO pin number for the DHT11 data line. Defaults to 2.\"}},"
+            "\"required\":[]}",
+        .execute = tool_dht11_read_execute,
+    };
+    register_tool(&dht11);
 
     build_tools_json();
 

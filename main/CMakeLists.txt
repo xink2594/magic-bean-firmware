@@ -23,6 +23,7 @@ idf_component_register(
         "tools/tool_gpio.c"
         "tools/tool_rgb.c"
         "tools/tool_weather.c"
+        "tools/tool_dht11.c"
         "tools/gpio_policy.c"
         "skills/skill_loader.c"
         "onboard/wifi_onboard.c"
