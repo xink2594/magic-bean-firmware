@@ -142,6 +142,24 @@ esp_err_t tool_camera_execute(const char *input_json, char *output, size_t outpu
         goto cleanup;
     }
 
+    ESP_LOGI(TAG, "Warming up camera (waiting for AWB/AE to stabilize)...");
+
+    // 给硬件传感器一点点稳定时间 (可选)
+    vTaskDelay(pdMS_TO_TICKS(200));
+
+    // 连续抓取并丢弃前 3~5 帧
+    // OV3660 通常丢弃 3 帧左右颜色就正常了，如果还是偏绿可以加大到 5
+    for (int i = 0; i < 4; i++)
+    {
+        camera_fb_t *dummy_fb = esp_camera_fb_get();
+        if (dummy_fb)
+        {
+            esp_camera_fb_return(dummy_fb);
+        }
+    }
+
+    ESP_LOGI(TAG, "Taking the actual photo...");
+
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb)
     {
