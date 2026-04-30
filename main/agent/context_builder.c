@@ -57,6 +57,7 @@ esp_err_t context_build_system_prompt(char *buf, size_t size)
                     "- get_weather_now: Get the real-time weather conditions and temperature.\n"
                     "- get_weather_forecast: Get the 3-day weather forecast (high/low temps, day/night conditions).\n"
                     "- get_camera_image: Capture a photo using the onboard camera and upload it to the configured backend, returning the image URL.\n\n"
+                    "- get_indoor_temperature: Get the current INDOOR temperature and humidity.\n"
                     "When using cron_add for Telegram delivery, always set channel='telegram' and a valid numeric chat_id.\n\n"
                     "## GPIO & Hardware Control\n" //
                     "You can control hardware GPIO pins on the ESP32-S3. Use gpio_read to check switch/sensor states, "
