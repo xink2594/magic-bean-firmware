@@ -31,6 +31,7 @@
 #include "tools/tool_camera.h"
 #include "tools/tool_rgb.h"
 #include "tools/tool_weather.h"
+#include "tools/tool_dht11.h"
 
 static const char *TAG = "mimi";
 
@@ -167,6 +168,7 @@ void app_main(void)
     ESP_ERROR_CHECK(serial_cli_init());
 
     ESP_ERROR_CHECK(tool_camera_init()); // 初始化摄像头工具上下文，硬件按需启动
+    ESP_ERROR_CHECK(tool_dht11_init());
 
     /* Start WiFi */
     esp_err_t wifi_err = wifi_manager_start();
@@ -203,9 +205,17 @@ void app_main(void)
 
     if (!wifi_ok)
     {
-        ESP_LOGW(TAG, "Entering WiFi onboarding mode...");
-        wifi_onboard_start(WIFI_ONBOARD_MODE_CAPTIVE); /* blocks, restarts on success */
-        return;                                        /* unreachable */
+        ESP_LOGW(TAG, "Entering App-based WiFi onboarding mode...");
+        // 使用 ADMIN 模式启动 AP 和 HTTP 服务，不触发 DNS 劫持（不弹窗）
+        wifi_onboard_start(WIFI_ONBOARD_MODE_ADMIN);
+
+        // 手动阻塞主线程。
+        // 当 App 在 WebView 里点击“Save & Restart”后，
+        // wifi_onboard.c 里的 /save 接口会调用 esp_restart() 重启设备。
+        while (1)
+        {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
     }
 
     if (wifi_onboard_start(WIFI_ONBOARD_MODE_ADMIN) != ESP_OK)
