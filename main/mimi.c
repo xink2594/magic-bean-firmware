@@ -132,7 +132,7 @@ void app_main(void)
 {
     /* Silence noisy components */
     esp_log_level_set("esp-x509-crt-bundle", ESP_LOG_WARN);
-
+    ESP_LOGI("MAIN", "Hello, MimiClaw is running!");
     ESP_LOGI(TAG, "========================================");
     ESP_LOGI(TAG, "  MimiClaw - ESP32-S3 AI Agent");
     ESP_LOGI(TAG, "========================================");
