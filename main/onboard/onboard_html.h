@@ -142,7 +142,7 @@ static const char ONBOARD_HTML[] =
     "fetch('/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})"
     ".then(()=>{"
     "  document.getElementById('status').textContent='Saved! Restarting...';"
-    "  // 如果处于 React Native WebView 环境中，向 App 发送成功信号"
+    /*如果处于 React Native WebView 环境中，向 App 发送成功信号*/
     "  if(window.ReactNativeWebView) {"
     "    window.ReactNativeWebView.postMessage('CONFIG_SUCCESS');"
     "  }"
