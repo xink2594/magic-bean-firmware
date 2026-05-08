@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static const char *TAG = "tool_mqtt";
 
@@ -27,7 +28,7 @@ static const char *TAG = "tool_mqtt";
 #define MQTT_DEBUG_STACK (5 * 1024)
 #define MQTT_DATA_STACK (5 * 1024)
 #define MQTT_DATA_PRIO 4
-#define MQTT_DATA_INTERVAL_MS (60 * 1000)
+#define MQTT_DATA_CHECK_INTERVAL_MS (5 * 1000)
 #define MQTT_DHT11_GPIO 2
 #define MQTT_WATER_GPIO -1
 #define MQTT_WATER_ACTIVE_LEVEL 1
@@ -75,41 +76,79 @@ static bool topic_matches(const char *topic, int topic_len, const char *expected
     return topic_len == (int)strlen(expected) && strncmp(topic, expected, topic_len) == 0;
 }
 
-esp_err_t tool_mqtt_publish_sensor_data(void)
+typedef struct {
+    float temperature;
+    float air_humidity;
+    float dirt_humidity;
+    int soil_raw;
+    esp_err_t dht_err;
+    esp_err_t soil_err;
+} mqtt_sensor_data_t;
+
+static void read_sensor_data(mqtt_sensor_data_t *data)
+{
+    memset(data, 0, sizeof(*data));
+
+    data->dht_err = dht_read_float_data(DHT_TYPE_DHT11,
+                                        (gpio_num_t)MQTT_DHT11_GPIO,
+                                        &data->air_humidity,
+                                        &data->temperature);
+    if (data->dht_err != ESP_OK) {
+        ESP_LOGW(TAG, "DHT11 read failed for MQTT data: %s", esp_err_to_name(data->dht_err));
+    }
+
+    data->soil_err = tool_md0504_read(&data->dirt_humidity, &data->soil_raw);
+    if (data->soil_err != ESP_OK) {
+        ESP_LOGW(TAG, "MD0504 read failed for MQTT data: %s", esp_err_to_name(data->soil_err));
+    }
+}
+
+static esp_err_t publish_payload(const char *topic, const char *payload)
 {
     if (!s_client || !s_connected) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    float temperature = 0.0f;
-    float air_humidity = 0.0f;
-    esp_err_t dht_err = dht_read_float_data(DHT_TYPE_DHT11,
-                                            (gpio_num_t)MQTT_DHT11_GPIO,
-                                            &air_humidity,
-                                            &temperature);
-    if (dht_err != ESP_OK) {
-        ESP_LOGW(TAG, "DHT11 read failed for MQTT data: %s", esp_err_to_name(dht_err));
-    }
+    int msg_id = esp_mqtt_client_publish(s_client, topic, payload, 0, 1, 0);
+    return (msg_id < 0) ? ESP_FAIL : ESP_OK;
+}
 
-    float dirt_humidity = 0.0f;
-    int soil_raw = 0;
-    esp_err_t soil_err = tool_md0504_read(&dirt_humidity, &soil_raw);
-    if (soil_err != ESP_OK) {
-        ESP_LOGW(TAG, "MD0504 read failed for MQTT data: %s", esp_err_to_name(soil_err));
-    }
+esp_err_t tool_mqtt_publish_sensor_data(void)
+{
+    mqtt_sensor_data_t data;
+    read_sensor_data(&data);
 
     char payload[128];
     snprintf(payload, sizeof(payload),
              "{\"temperature\":%.1f,\"air_humidity\":%.1f,\"dirt_humidity\":%.1f}",
-             temperature, air_humidity, dirt_humidity);
+             data.temperature, data.air_humidity, data.dirt_humidity);
 
-    int msg_id = esp_mqtt_client_publish(s_client, s_data_topic, payload, 0, 1, 0);
-    if (msg_id < 0) {
-        return ESP_FAIL;
+    esp_err_t err = publish_payload(s_data_topic, payload);
+    if (err != ESP_OK) {
+        return err;
     }
 
     ESP_LOGI(TAG, "MQTT sensor data published: %s", payload);
     return ESP_OK;
+}
+
+static esp_err_t publish_debug_sensor_data(void)
+{
+    mqtt_sensor_data_t data;
+    read_sensor_data(&data);
+
+    char payload[256];
+    snprintf(payload, sizeof(payload),
+             "{\"cmd\":\"data_reply\",\"temperature\":%.1f,\"air_humidity\":%.1f,"
+             "\"dirt_humidity\":%.1f,\"soil_raw\":%d,\"dht_error\":\"%s\",\"soil_error\":\"%s\"}",
+             data.temperature, data.air_humidity, data.dirt_humidity, data.soil_raw,
+             esp_err_to_name(data.dht_err), esp_err_to_name(data.soil_err));
+
+    esp_err_t err = publish_payload(s_debug_topic, payload);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "MQTT debug data replied: %s", payload);
+    }
+    return err;
 }
 
 static void publish_status(const char *status)
@@ -125,12 +164,26 @@ static void publish_status(const char *status)
 static void data_publish_task(void *arg)
 {
     (void)arg;
+    int last_slot_key = -1;
 
     while (1) {
         if (s_connected) {
-            tool_mqtt_publish_sensor_data();
+            time_t now = time(NULL);
+            struct tm tm_now = {0};
+            localtime_r(&now, &tm_now);
+
+            bool time_ready = (tm_now.tm_year >= (2024 - 1900));
+            if (time_ready && (tm_now.tm_min == 0 || tm_now.tm_min == 30) && tm_now.tm_sec < 10) {
+                int slot_key = (tm_now.tm_yday * 24 * 60) + (tm_now.tm_hour * 60) + tm_now.tm_min;
+                if (slot_key != last_slot_key) {
+                    esp_err_t err = tool_mqtt_publish_sensor_data();
+                    ESP_LOGI(TAG, "MQTT scheduled data publish at %02d:%02d:%02d: %s",
+                             tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec, esp_err_to_name(err));
+                    last_slot_key = slot_key;
+                }
+            }
         }
-        vTaskDelay(pdMS_TO_TICKS(MQTT_DATA_INTERVAL_MS));
+        vTaskDelay(pdMS_TO_TICKS(MQTT_DATA_CHECK_INTERVAL_MS));
     }
 }
 
@@ -253,8 +306,10 @@ static void debug_task(void *arg)
     }
 
     if (strcmp(cmd_obj->valuestring, "data") == 0) {
-        esp_err_t err = tool_mqtt_publish_sensor_data();
-        ESP_LOGI(TAG, "MQTT debug data publish result: %s", esp_err_to_name(err));
+        esp_err_t err = publish_debug_sensor_data();
+        ESP_LOGI(TAG, "MQTT debug data reply result: %s", esp_err_to_name(err));
+    } else if (strcmp(cmd_obj->valuestring, "data_reply") == 0) {
+        ESP_LOGD(TAG, "Ignoring MQTT debug reply echo");
     } else {
         ESP_LOGW(TAG, "Unknown MQTT debug cmd: %s", cmd_obj->valuestring);
     }
@@ -303,7 +358,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         esp_mqtt_client_subscribe(s_client, s_cmd_topic, 1);
         esp_mqtt_client_subscribe(s_client, s_debug_topic, 1);
         publish_status("online");
-        tool_mqtt_publish_sensor_data();
         break;
     case MQTT_EVENT_DISCONNECTED:
         s_connected = false;
