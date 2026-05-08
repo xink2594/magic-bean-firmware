@@ -46,6 +46,18 @@
 #ifndef MIMI_SECRET_TAVILY_KEY
 #define MIMI_SECRET_TAVILY_KEY      ""
 #endif
+#ifndef MIMI_SECRET_MQTT_BROKER_URI
+#define MIMI_SECRET_MQTT_BROKER_URI ""
+#endif
+#ifndef MIMI_SECRET_MQTT_USERNAME
+#define MIMI_SECRET_MQTT_USERNAME   ""
+#endif
+#ifndef MIMI_SECRET_MQTT_PASSWORD
+#define MIMI_SECRET_MQTT_PASSWORD   ""
+#endif
+#ifndef MIMI_SECRET_MQTT_CLIENT_ID
+#define MIMI_SECRET_MQTT_CLIENT_ID  ""
+#endif
 
 /* WiFi */
 #define MIMI_WIFI_MAX_RETRY          10

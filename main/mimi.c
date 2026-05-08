@@ -32,6 +32,7 @@
 #include "tools/tool_rgb.h"
 #include "tools/tool_weather.h"
 #include "tools/tool_dht11.h"
+#include "tools/tool_mqtt.h"
 
 static const char *TAG = "mimi";
 
@@ -169,6 +170,7 @@ void app_main(void)
 
     ESP_ERROR_CHECK(tool_camera_init()); // 初始化摄像头工具上下文，硬件按需启动
     ESP_ERROR_CHECK(tool_dht11_init());
+    ESP_ERROR_CHECK(tool_mqtt_init());
 
     /* Start WiFi */
     esp_err_t wifi_err = wifi_manager_start();
@@ -239,6 +241,7 @@ void app_main(void)
         cron_service_start();
         heartbeat_start();
         ESP_ERROR_CHECK(ws_server_start());
+        ESP_ERROR_CHECK(tool_mqtt_start());
 
         ESP_LOGI(TAG, "All services started!");
     }
