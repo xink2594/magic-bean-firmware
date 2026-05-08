@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "freertos/timers.h"
 #include "esp_log.h"
 
@@ -17,7 +18,11 @@ static const char *TAG = "heartbeat";
     "Read " MIMI_HEARTBEAT_FILE " and follow any instructions or tasks listed there. " \
     "If nothing needs attention, reply with just: HEARTBEAT_OK"
 
+#define HEARTBEAT_TASK_STACK (4096)
+#define HEARTBEAT_TASK_PRIO  4
+
 static TimerHandle_t s_heartbeat_timer = NULL;
+static TaskHandle_t s_heartbeat_task = NULL;
 
 /* ── Content check ────────────────────────────────────────────── */
 
@@ -103,12 +108,25 @@ static bool heartbeat_send(void)
     return true;
 }
 
+static void heartbeat_task_main(void *arg)
+{
+    (void)arg;
+
+    while (1) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        heartbeat_send();
+    }
+}
+
 /* ── Timer callback ───────────────────────────────────────────── */
 
 static void heartbeat_timer_callback(TimerHandle_t xTimer)
 {
     (void)xTimer;
-    heartbeat_send();
+
+    if (s_heartbeat_task) {
+        xTaskNotifyGive(s_heartbeat_task);
+    }
 }
 
 /* ── Public API ───────────────────────────────────────────────── */
@@ -127,6 +145,21 @@ esp_err_t heartbeat_start(void)
         return ESP_OK;
     }
 
+    if (!s_heartbeat_task) {
+        BaseType_t task_ok = xTaskCreate(
+            heartbeat_task_main,
+            "heartbeat",
+            HEARTBEAT_TASK_STACK,
+            NULL,
+            HEARTBEAT_TASK_PRIO,
+            &s_heartbeat_task
+        );
+        if (task_ok != pdPASS || !s_heartbeat_task) {
+            ESP_LOGE(TAG, "Failed to create heartbeat task");
+            return ESP_FAIL;
+        }
+    }
+
     s_heartbeat_timer = xTimerCreate(
         "heartbeat",
         pdMS_TO_TICKS(MIMI_HEARTBEAT_INTERVAL_MS),
@@ -137,11 +170,21 @@ esp_err_t heartbeat_start(void)
 
     if (!s_heartbeat_timer) {
         ESP_LOGE(TAG, "Failed to create heartbeat timer");
+        if (s_heartbeat_task) {
+            vTaskDelete(s_heartbeat_task);
+            s_heartbeat_task = NULL;
+        }
         return ESP_FAIL;
     }
 
     if (xTimerStart(s_heartbeat_timer, pdMS_TO_TICKS(1000)) != pdPASS) {
         ESP_LOGE(TAG, "Failed to start heartbeat timer");
+        xTimerDelete(s_heartbeat_timer, pdMS_TO_TICKS(1000));
+        s_heartbeat_timer = NULL;
+        if (s_heartbeat_task) {
+            vTaskDelete(s_heartbeat_task);
+            s_heartbeat_task = NULL;
+        }
         return ESP_FAIL;
     }
 
@@ -155,11 +198,20 @@ void heartbeat_stop(void)
         xTimerStop(s_heartbeat_timer, pdMS_TO_TICKS(1000));
         xTimerDelete(s_heartbeat_timer, pdMS_TO_TICKS(1000));
         s_heartbeat_timer = NULL;
-        ESP_LOGI(TAG, "Heartbeat stopped");
     }
+    if (s_heartbeat_task) {
+        vTaskDelete(s_heartbeat_task);
+        s_heartbeat_task = NULL;
+    }
+    ESP_LOGI(TAG, "Heartbeat stopped");
 }
 
 bool heartbeat_trigger(void)
 {
+    if (s_heartbeat_task) {
+        xTaskNotifyGive(s_heartbeat_task);
+        return true;
+    }
+
     return heartbeat_send();
 }
