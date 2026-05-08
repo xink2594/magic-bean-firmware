@@ -42,6 +42,7 @@ static char s_status_topic[MQTT_TOPIC_LEN];
 static char s_data_topic[MQTT_TOPIC_LEN];
 static char s_cmd_topic[MQTT_TOPIC_LEN];
 static char s_debug_topic[MQTT_TOPIC_LEN];
+static char s_log_topic[MQTT_TOPIC_LEN];
 
 typedef struct {
     char *payload;
@@ -63,6 +64,7 @@ static void init_topics(void)
     snprintf(s_data_topic, sizeof(s_data_topic), "plant/%s/data", s_mac);
     snprintf(s_cmd_topic, sizeof(s_cmd_topic), "plant/%s/cmd", s_mac);
     snprintf(s_debug_topic, sizeof(s_debug_topic), "plant/%s/debug", s_mac);
+    snprintf(s_log_topic, sizeof(s_log_topic), "plant/%s/log", s_mac);
 
     if (MIMI_SECRET_MQTT_CLIENT_ID[0] != '\0') {
         snprintf(s_client_id, sizeof(s_client_id), "%s", MIMI_SECRET_MQTT_CLIENT_ID);
@@ -113,6 +115,35 @@ static esp_err_t publish_payload(const char *topic, const char *payload)
     return (msg_id < 0) ? ESP_FAIL : ESP_OK;
 }
 
+esp_err_t tool_mqtt_publish_log(const char *module, const char *message)
+{
+    if (!module) {
+        module = "system";
+    }
+    if (!message) {
+        message = "";
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    cJSON_AddStringToObject(root, "type", "log");
+    cJSON_AddStringToObject(root, "module", module);
+    cJSON_AddStringToObject(root, "message", message);
+
+    char *payload = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!payload) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    esp_err_t err = publish_payload(s_log_topic, payload);
+    free(payload);
+    return err;
+}
+
 esp_err_t tool_mqtt_publish_sensor_data(void)
 {
     mqtt_sensor_data_t data;
@@ -139,14 +170,14 @@ static esp_err_t publish_debug_sensor_data(void)
 
     char payload[256];
     snprintf(payload, sizeof(payload),
-             "{\"cmd\":\"data_reply\",\"temperature\":%.1f,\"air_humidity\":%.1f,"
+             "{\"type\":\"debug\",\"cmd\":\"data_reply\",\"temperature\":%.1f,\"air_humidity\":%.1f,"
              "\"dirt_humidity\":%.1f,\"soil_raw\":%d,\"dht_error\":\"%s\",\"soil_error\":\"%s\"}",
              data.temperature, data.air_humidity, data.dirt_humidity, data.soil_raw,
              esp_err_to_name(data.dht_err), esp_err_to_name(data.soil_err));
 
-    esp_err_t err = publish_payload(s_debug_topic, payload);
+    esp_err_t err = publish_payload(s_log_topic, payload);
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "MQTT debug data replied: %s", payload);
+        ESP_LOGI(TAG, "MQTT debug data logged: %s", payload);
     }
     return err;
 }
@@ -308,8 +339,6 @@ static void debug_task(void *arg)
     if (strcmp(cmd_obj->valuestring, "data") == 0) {
         esp_err_t err = publish_debug_sensor_data();
         ESP_LOGI(TAG, "MQTT debug data reply result: %s", esp_err_to_name(err));
-    } else if (strcmp(cmd_obj->valuestring, "data_reply") == 0) {
-        ESP_LOGD(TAG, "Ignoring MQTT debug reply echo");
     } else {
         ESP_LOGW(TAG, "Unknown MQTT debug cmd: %s", cmd_obj->valuestring);
     }
@@ -387,8 +416,8 @@ esp_err_t tool_mqtt_init(void)
     }
 
     tool_md0504_init();
-    ESP_LOGI(TAG, "MQTT topics: status=%s data=%s cmd=%s debug=%s",
-             s_status_topic, s_data_topic, s_cmd_topic, s_debug_topic);
+    ESP_LOGI(TAG, "MQTT topics: status=%s data=%s cmd=%s debug=%s log=%s",
+             s_status_topic, s_data_topic, s_cmd_topic, s_debug_topic, s_log_topic);
     return ESP_OK;
 }
 
