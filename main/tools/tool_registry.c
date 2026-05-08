@@ -11,6 +11,7 @@
 #include "tools/tool_weather.h"
 #include "tools/tool_camera.h"
 #include "tools/tool_dht11.h"
+#include "tools/tool_md0504.h"
 
 /* RGB 工具函数 */
 extern esp_err_t tool_rgb_init(void);
@@ -296,6 +297,20 @@ esp_err_t tool_registry_init(void)
         .execute = tool_dht11_read_execute,
     };
     register_tool(&dht11);
+
+    /* Register MD0504 soil moisture tool */
+    tool_md0504_init();
+
+    mimi_tool_t md0504 = {
+        .name = "get_soil_Humidity",
+        .description = "Read the plant soil moisture from an MD0504 analog sensor. AO is wired to GPIO19.",
+        .input_schema_json =
+            "{\"type\":\"object\","
+            "\"properties\":{},"
+            "\"required\":[]}",
+        .execute = tool_md0504_read_execute,
+    };
+    register_tool(&md0504);
 
     build_tools_json();
 

@@ -24,6 +24,7 @@ idf_component_register(
         "tools/tool_rgb.c"
         "tools/tool_weather.c"
         "tools/tool_dht11.c"
+        "tools/tool_md0504.c"
         "tools/tool_mqtt.c"
         "tools/gpio_policy.c"
         "skills/skill_loader.c"
@@ -35,4 +36,5 @@ idf_component_register(
         nvs_flash esp_wifi esp_netif esp_http_client esp_http_server
         esp_https_ota esp_event json spiffs console vfs app_update esp-tls
         esp_timer esp_websocket_client esp_driver_gpio led_strip esp32-camera dht
+        mqtt esp_adc
 )
