@@ -58,6 +58,9 @@
 #ifndef MIMI_SECRET_MQTT_CLIENT_ID
 #define MIMI_SECRET_MQTT_CLIENT_ID  ""
 #endif
+#ifndef MIMI_SECRET_UPLOAD_API_URL
+#define MIMI_SECRET_UPLOAD_API_URL  ""
+#endif
 
 /* WiFi */
 #define MIMI_WIFI_MAX_RETRY          10
@@ -151,6 +154,8 @@
 #define MIMI_NVS_LLM                 "llm_config"
 #define MIMI_NVS_PROXY               "proxy_config"
 #define MIMI_NVS_SEARCH              "search_config"
+#define MIMI_NVS_MQTT                "mqtt_config"
+#define MIMI_NVS_UPLOAD              "upload_config"
 
 /* NVS Keys */
 #define MIMI_NVS_KEY_SSID            "ssid"
@@ -165,6 +170,11 @@
 #define MIMI_NVS_KEY_PROXY_HOST      "host"
 #define MIMI_NVS_KEY_PROXY_PORT      "port"
 #define MIMI_NVS_KEY_PROXY_TYPE      "proxy_type"
+#define MIMI_NVS_KEY_MQTT_BROKER_URI "broker_uri"
+#define MIMI_NVS_KEY_MQTT_USERNAME   "username"
+#define MIMI_NVS_KEY_MQTT_PASSWORD   "password"
+#define MIMI_NVS_KEY_MQTT_CLIENT_ID  "client_id"
+#define MIMI_NVS_KEY_UPLOAD_API_URL  "api_url"
 
 /* WiFi Onboarding (Captive Portal) */
 #define MIMI_ONBOARD_AP_PREFIX    "MimiClaw-"

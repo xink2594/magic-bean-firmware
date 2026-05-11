@@ -23,6 +23,14 @@ static const char *TAG = "onboard";
 static httpd_handle_t s_server = NULL;
 static bool s_captive_mode = false;
 
+static void get_sta_mac_string(char *out, size_t out_size)
+{
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(out, out_size, "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
 static void json_add_effective_config(cJSON *root, const char *json_key,
                                       const char *ns, const char *nvs_key,
                                       const char *build_val)
@@ -228,6 +236,12 @@ static esp_err_t http_get_config(httpd_req_t *req)
     json_add_effective_config(root, "proxy_type", MIMI_NVS_PROXY, MIMI_NVS_KEY_PROXY_TYPE, MIMI_SECRET_PROXY_TYPE);
     json_add_effective_config(root, "search_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_API_KEY, MIMI_SECRET_SEARCH_KEY);
     json_add_effective_config(root, "tavily_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_TAVILY_KEY, MIMI_SECRET_TAVILY_KEY);
+    json_add_effective_config(root, "mqtt_broker_uri", MIMI_NVS_MQTT, MIMI_NVS_KEY_MQTT_BROKER_URI, MIMI_SECRET_MQTT_BROKER_URI);
+    json_add_effective_config(root, "upload_api_url", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_API_URL, MIMI_SECRET_UPLOAD_API_URL);
+
+    char mac[13] = {0};
+    get_sta_mac_string(mac, sizeof(mac));
+    cJSON_AddStringToObject(root, "mac", mac);
 
     char *json = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -306,7 +320,7 @@ static void nvs_sync_u16_field(cJSON *root, const char *json_key,
 static esp_err_t http_post_save(httpd_req_t *req)
 {
     int total_len = req->content_len;
-    if (total_len <= 0 || total_len > 2048) {
+    if (total_len <= 0 || total_len > 4096) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Bad length");
         return ESP_FAIL;
     }
@@ -360,10 +374,37 @@ static esp_err_t http_post_save(httpd_req_t *req)
     nvs_sync_field(root, "search_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_API_KEY);
     nvs_sync_field(root, "tavily_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_TAVILY_KEY);
 
+    /* MQTT */
+    nvs_sync_field(root, "mqtt_broker_uri", MIMI_NVS_MQTT, MIMI_NVS_KEY_MQTT_BROKER_URI);
+
+    /* Upload */
+    nvs_sync_field(root, "upload_api_url", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_API_URL);
+
+    char mac[13] = {0};
+    get_sta_mac_string(mac, sizeof(mac));
+    const char *mqtt = cJSON_GetStringValue(cJSON_GetObjectItem(root, "mqtt_broker_uri"));
+
+    cJSON *resp = cJSON_CreateObject();
+    if (!resp) {
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OOM");
+        return ESP_FAIL;
+    }
+    cJSON_AddBoolToObject(resp, "ok", true);
+    cJSON_AddStringToObject(resp, "mac", mac);
+    cJSON_AddStringToObject(resp, "mqtt", mqtt ? mqtt : "");
+
+    char *response = cJSON_PrintUnformatted(resp);
+    cJSON_Delete(resp);
     cJSON_Delete(root);
+    if (!response) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OOM");
+        return ESP_FAIL;
+    }
 
     httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, "{\"ok\":true}", 11);
+    httpd_resp_send(req, response, strlen(response));
+    free(response);
 
     ESP_LOGI(TAG, "Configuration saved, restarting in 2s...");
     vTaskDelay(pdMS_TO_TICKS(2000));

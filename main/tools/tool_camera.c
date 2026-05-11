@@ -1,6 +1,5 @@
 #include "tool_camera.h"
-// 引入包含 MIMI_SECRET_UPLOAD_API_URL 的头文件，根据你的项目结构调整
-#include "mimi_secrets.h"
+#include "mimi_config.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -11,6 +10,7 @@
 #include "esp_http_client.h"
 #include "esp_heap_caps.h"
 #include "cJSON.h"
+#include "nvs.h"
 
 static const char *TAG = "tool_camera";
 static bool s_cam_initialized = false;
@@ -38,6 +38,25 @@ static SemaphoreHandle_t s_camera_mutex = NULL;
 
 // 用于 HTTP 上传的表单边界
 #define UPLOAD_BOUNDARY "----MimiCameraUploadBoundary7MA4YWxkTrZu0gW"
+
+static void get_upload_api_url(char *url, size_t url_size)
+{
+    url[0] = '\0';
+
+    nvs_handle_t nvs;
+    if (nvs_open(MIMI_NVS_UPLOAD, NVS_READONLY, &nvs) == ESP_OK)
+    {
+        size_t len = url_size;
+        if (nvs_get_str(nvs, MIMI_NVS_KEY_UPLOAD_API_URL, url, &len) == ESP_OK && url[0] != '\0')
+        {
+            nvs_close(nvs);
+            return;
+        }
+        nvs_close(nvs);
+    }
+
+    strlcpy(url, MIMI_SECRET_UPLOAD_API_URL, url_size);
+}
 
 static esp_err_t tool_camera_hw_init(void)
 {
@@ -203,8 +222,18 @@ esp_err_t tool_camera_execute(const char *input_json, char *output, size_t outpu
 
     size_t total_len = strlen(head) + image_len + strlen(tail);
 
+    char upload_url[256];
+    get_upload_api_url(upload_url, sizeof(upload_url));
+    if (upload_url[0] == '\0')
+    {
+        snprintf(output, output_size, "Error: Image upload API URL is empty.");
+        free(image_buf);
+        err = ESP_ERR_INVALID_STATE;
+        goto cleanup;
+    }
+
     esp_http_client_config_t config = {
-        .url = MIMI_SECRET_UPLOAD_API_URL,
+        .url = upload_url,
         .method = HTTP_METHOD_POST,
         .timeout_ms = 15000, // 图片上传需要较长时间，设置 15 秒超时
     };

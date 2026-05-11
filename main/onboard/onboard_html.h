@@ -34,6 +34,9 @@ static const char ONBOARD_HTML[] =
     "<p style='text-align:center;color:#666;font-size:.9em;margin-bottom:12px'>"
     "This local portal remains available at 192.168.4.1 for later updates."
     "</p>"
+    "<p style='text-align:center;color:#888;font-size:.8em;margin-bottom:12px'>"
+    "MAC: <span id='mac_text'>--</span>"
+    "</p>"
 
     /* WiFi section (expanded by default) */
     "<div class='card' id='sec-wifi'>"
@@ -106,6 +109,16 @@ static const char ONBOARD_HTML[] =
     "<input id='tavily_key' type='password' placeholder='tvly-...'>"
     "</div></div>"
 
+    /* Magic Bean section */
+    "<div class='card collapsed' id='sec-magic-bean'>"
+    "<div class='card-hdr' onclick='toggle(this)'>Magic Bean</div>"
+    "<div class='card-body'>"
+    "<label>MQTT Broker URI</label>"
+    "<input id='mqtt_broker_uri' placeholder='mqtt://broker.example.com:1883'>"
+    "<label>Image Upload API URL</label>"
+    "<input id='upload_api_url' placeholder='https://example.com/api/image/upload'>"
+    "</div></div>"
+
     "<button class='btn btn-save' onclick='save()'>Save &amp; Restart</button>"
     "<div class='status' id='status'>Saving... Device will restart.</div>"
 
@@ -115,6 +128,7 @@ static const char ONBOARD_HTML[] =
 
     "function loadConfig(){"
     "fetch('/config').then(r=>r.json()).then(cfg=>{"
+    "if(cfg.mac){document.getElementById('mac_text').textContent=cfg.mac}"
     "Object.keys(cfg).forEach(k=>{"
     "var el=document.getElementById(k);"
     "if(el && cfg[k] !== undefined && cfg[k] !== null){el.value=cfg[k]}"
@@ -135,16 +149,18 @@ static const char ONBOARD_HTML[] =
 
     "function save(){"
     "var fields=['ssid','password','api_key','model','provider','tg_token',"
-    "'feishu_app_id','feishu_app_secret','proxy_host','proxy_port','proxy_type','search_key','tavily_key'];"
+    "'feishu_app_id','feishu_app_secret','proxy_host','proxy_port','proxy_type','search_key','tavily_key',"
+    "'mqtt_broker_uri','upload_api_url'];"
     "var data={};"
     "fields.forEach(f=>{data[f]=document.getElementById(f).value.trim()});"
+    "data.mac=document.getElementById('mac_text').textContent;"
     "document.getElementById('status').style.display='block';"
     "fetch('/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})"
-    ".then(()=>{"
+    ".then(r=>r.json()).then(resp=>{"
     "  document.getElementById('status').textContent='Saved! Restarting...';"
     /*如果处于 React Native WebView 环境中，向 App 发送成功信号*/
     "  if(window.ReactNativeWebView) {"
-    "    window.ReactNativeWebView.postMessage('CONFIG_SUCCESS');"
+    "    window.ReactNativeWebView.postMessage(JSON.stringify({type:'CONFIG_SUCCESS',mac:resp.mac||data.mac,mqtt:resp.mqtt||data.mqtt_broker_uri||''}));"
     "  }"
     "})"
     ".catch(()=>{document.getElementById('status').textContent='Error. Please try again.';})}"

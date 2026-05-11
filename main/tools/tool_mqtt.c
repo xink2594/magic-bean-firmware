@@ -13,6 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mqtt_client.h"
+#include "nvs.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -43,6 +44,9 @@ static char s_data_topic[MQTT_TOPIC_LEN];
 static char s_cmd_topic[MQTT_TOPIC_LEN];
 static char s_debug_topic[MQTT_TOPIC_LEN];
 static char s_log_topic[MQTT_TOPIC_LEN];
+static char s_broker_uri[256];
+static char s_username[128];
+static char s_password[128];
 
 typedef struct {
     char *payload;
@@ -51,7 +55,36 @@ typedef struct {
 
 static bool mqtt_enabled(void)
 {
-    return MIMI_SECRET_MQTT_BROKER_URI[0] != '\0';
+    return s_broker_uri[0] != '\0';
+}
+
+static void load_config_string(const char *key, const char *build_value, char *out, size_t out_size)
+{
+    out[0] = '\0';
+
+    nvs_handle_t nvs;
+    if (nvs_open(MIMI_NVS_MQTT, NVS_READONLY, &nvs) == ESP_OK) {
+        size_t len = out_size;
+        if (nvs_get_str(nvs, key, out, &len) == ESP_OK && out[0] != '\0') {
+            nvs_close(nvs);
+            return;
+        }
+        nvs_close(nvs);
+    }
+
+    if (build_value) {
+        strlcpy(out, build_value, out_size);
+    }
+}
+
+static void load_mqtt_config(void)
+{
+    load_config_string(MIMI_NVS_KEY_MQTT_BROKER_URI, MIMI_SECRET_MQTT_BROKER_URI,
+                       s_broker_uri, sizeof(s_broker_uri));
+    load_config_string(MIMI_NVS_KEY_MQTT_USERNAME, MIMI_SECRET_MQTT_USERNAME,
+                       s_username, sizeof(s_username));
+    load_config_string(MIMI_NVS_KEY_MQTT_PASSWORD, MIMI_SECRET_MQTT_PASSWORD,
+                       s_password, sizeof(s_password));
 }
 
 static void init_topics(void)
@@ -66,8 +99,12 @@ static void init_topics(void)
     snprintf(s_debug_topic, sizeof(s_debug_topic), "plant/%s/debug", s_mac);
     snprintf(s_log_topic, sizeof(s_log_topic), "plant/%s/log", s_mac);
 
-    if (MIMI_SECRET_MQTT_CLIENT_ID[0] != '\0') {
-        snprintf(s_client_id, sizeof(s_client_id), "%s", MIMI_SECRET_MQTT_CLIENT_ID);
+    char configured_client_id[MQTT_CLIENT_ID_LEN] = {0};
+    load_config_string(MIMI_NVS_KEY_MQTT_CLIENT_ID, MIMI_SECRET_MQTT_CLIENT_ID,
+                       configured_client_id, sizeof(configured_client_id));
+
+    if (configured_client_id[0] != '\0') {
+        snprintf(s_client_id, sizeof(s_client_id), "%s", configured_client_id);
     } else {
         snprintf(s_client_id, sizeof(s_client_id), "plant_%s", s_mac);
     }
@@ -409,6 +446,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
 esp_err_t tool_mqtt_init(void)
 {
+    load_mqtt_config();
     init_topics();
     if (!mqtt_enabled()) {
         ESP_LOGI(TAG, "MQTT disabled; broker URI is empty");
@@ -431,10 +469,10 @@ esp_err_t tool_mqtt_start(void)
     }
 
     esp_mqtt_client_config_t config = {
-        .broker.address.uri = MIMI_SECRET_MQTT_BROKER_URI,
+        .broker.address.uri = s_broker_uri,
         .credentials.client_id = s_client_id,
-        .credentials.username = MIMI_SECRET_MQTT_USERNAME[0] ? MIMI_SECRET_MQTT_USERNAME : NULL,
-        .credentials.authentication.password = MIMI_SECRET_MQTT_PASSWORD[0] ? MIMI_SECRET_MQTT_PASSWORD : NULL,
+        .credentials.username = s_username[0] ? s_username : NULL,
+        .credentials.authentication.password = s_password[0] ? s_password : NULL,
         .session.last_will.topic = s_status_topic,
         .session.last_will.msg = "{\"status\":\"offline\"}",
         .session.last_will.qos = 1,
