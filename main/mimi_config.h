@@ -46,6 +46,12 @@
 #ifndef MIMI_SECRET_TAVILY_KEY
 #define MIMI_SECRET_TAVILY_KEY      ""
 #endif
+#ifndef MIMI_SECRET_MQTT_BROKER
+#define MIMI_SECRET_MQTT_BROKER     ""
+#endif
+#ifndef MIMI_SECRET_MQTT_PORT
+#define MIMI_SECRET_MQTT_PORT       "1883"
+#endif
 #ifndef MIMI_SECRET_MQTT_BROKER_URI
 #define MIMI_SECRET_MQTT_BROKER_URI ""
 #endif
@@ -170,7 +176,9 @@
 #define MIMI_NVS_KEY_PROXY_HOST      "host"
 #define MIMI_NVS_KEY_PROXY_PORT      "port"
 #define MIMI_NVS_KEY_PROXY_TYPE      "proxy_type"
-#define MIMI_NVS_KEY_MQTT_BROKER_URI "broker_uri"
+#define MIMI_NVS_KEY_MQTT_BROKER     "broker"
+#define MIMI_NVS_KEY_MQTT_PORT       "port"
+#define MIMI_NVS_KEY_MQTT_BROKER_URI "broker_uri" /* legacy */
 #define MIMI_NVS_KEY_MQTT_USERNAME   "username"
 #define MIMI_NVS_KEY_MQTT_PASSWORD   "password"
 #define MIMI_NVS_KEY_MQTT_CLIENT_ID  "client_id"

@@ -1,76 +1,95 @@
-# MimiClaw: Pocket AI Assistant on a $5 Chip
+# Magic Bean: AI 驱动的智能植物养护系统
 
 <p align="center">
-  <img src="assets/banner.png" alt="MimiClaw" width="500" />
+  <img src="assets/banner.png" alt="Magic Bean" width="500" />
 </p>
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <a href="https://deepwiki.com/memovai/mimiclaw"><img src="https://img.shields.io/badge/DeepWiki-mimiclaw-blue.svg" alt="DeepWiki"></a>
-  <a href="https://discord.gg/r8ZxSvB8Yr"><img src="https://img.shields.io/badge/Discord-mimiclaw-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://x.com/ssslvky"><img src="https://img.shields.io/badge/X-@ssslvky-black?logo=x" alt="X"></a>
+  <a href="https://github.com/yourusername/magic-bean-firmware"><img src="https://img.shields.io/badge/Platform-ESP32--S3-green.svg" alt="Platform"></a>
 </p>
 
 <p align="center">
-  <strong><a href="README.md">English</a> | <a href="README_CN.md">中文</a> | <a href="README_JA.md">日本語</a></strong>
+  <strong><a href="README.md">中文</a> | <a href="README_Mimiclaw.md">English (原版)</a></strong>
 </p>
 
-**The world's first AI assistant(OpenClaw) on a $5 chip. No Linux. No Node.js. Just pure C**
+**基于 [MimiClaw](https://github.com/memovai/mimiclaw) 二次开发的 ESP32-S3 智能植物养护固件**
 
-MimiClaw turns a tiny ESP32-S3 board into a personal AI assistant. Plug it into USB power, connect to WiFi, and talk to it through Telegram — it handles any task you throw at it and evolves over time with local memory — all on a chip the size of a thumb.
+Magic Bean 将 ESP32-S3 开发板变成你的智能植物管家。通过传感器实时监测植物生长环境，AI 分析并自主执行养护任务，支持远程拍照、自动浇水、MQTT 物联网通信 — 全部跑在一颗拇指大小的芯片上。
 
-## Meet MimiClaw
+## 核心特性
 
-- **Tiny** — No Linux, no Node.js, no bloat — just pure C
-- **Handy** — Message it from Telegram, it handles the rest
-- **Loyal** — Learns from memory, remembers across reboots
-- **Energetic** — USB power, 0.5 W, runs 24/7
-- **Lovable** — One ESP32-S3 board, $5, nothing else
+- **智能感知** — DHT11 温湿度传感器 + MD0504 土壤湿度传感器，实时监测植物环境
+- **视觉监控** — OV3660 摄像头拍照上传，远程查看植物生长状态
+- **MQTT 物联网** — 完整的 MQTT 支持，实现设备与云端双向通信
+- **AI 驱动** — 基于 LLM Agent 循环，AI 可自主分析传感器数据并执行养护决策
+- **远程控制** — 通过 Telegram/飞书发送指令，或通过 MQTT 远程控制浇水和拍照
+- **定时任务** — 内置 Cron 调度器，支持定时巡检和周期性任务
+- **RGB 指示灯** — WS2812 RGB LED，直观显示设备状态
+- **天气查询** — 实时获取天气信息，结合天气制定养护策略
 
-## How It Works
+## 系统架构
 
-![](assets/mimiclaw.png)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Magic Bean 固件                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐        │
+│  │ 摄像头   │  │ DHT11    │  │ MD0504   │  │ RGB LED  │        │
+│  │ OV3660   │  │ 温湿度   │  │ 土壤湿度 │  │ WS2812   │        │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘        │
+│       │              │              │              │              │
+│  ┌────┴──────────────┴──────────────┴──────────────┴────┐       │
+│  │                   AI Agent 循环                       │       │
+│  │         (ReAct 模式 + 工具调用 + 记忆系统)            │       │
+│  └──────────────────────┬───────────────────────────────┘       │
+│                         │                                        │
+│  ┌──────────┐  ┌────────┴────────┐  ┌──────────┐                │
+│  │ Telegram │  │     MQTT        │  │   飞书   │                │
+│  │   Bot    │  │ (物联网通信)    │  │   Bot    │                │
+│  └──────────┘  └─────────────────┘  └──────────┘                │
+└─────────────────────────────────────────────────────────────────┘
+         │                    │                    │
+         └────────────────────┼────────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │   云端 / 用户端   │
+                    └───────────────────┘
+```
 
-You send a message on Telegram. The ESP32-S3 picks it up over WiFi, feeds it into an agent loop — the LLM thinks, calls tools, reads memory — and sends the reply back. Supports both **Anthropic (Claude)** and **OpenAI (GPT)** as providers, switchable at runtime. Everything runs on a single $5 chip with all your data stored locally on flash.
+## 快速开始
 
-## Quick Start
+### 硬件需求
 
-### What You Need
+- **ESP32-S3 开发板** — 16MB Flash + 8MB PSRAM（如小智 AI 开发板，~¥30）
+- **OV3660 摄像头模块** — 用于拍照监控
+- **DHT11 温湿度传感器** — 默认 GPIO2
+- **MD0504 土壤湿度传感器** — 模拟量输出，GPIO19
+- **WS2812 RGB LED** — 状态指示灯
+- **继电器模块** — 用于控制水泵（可选）
+- **USB Type-C 数据线**
 
-- An **ESP32-S3 dev board** with 16 MB flash and 8 MB PSRAM (e.g. Xiaozhi AI board, ~$10)
-- A **USB Type-C cable**
-- A **Telegram bot token** — talk to [@BotFather](https://t.me/BotFather) on Telegram to create one
-- An **Anthropic API key** — from [console.anthropic.com](https://console.anthropic.com), or an **OpenAI API key** — from [platform.openai.com](https://platform.openai.com)
+### 软件需求
 
-### Install
+- ESP-IDF v5.5+
+- Telegram Bot Token（可选）
+- Anthropic API Key 或 OpenAI API Key
+- MQTT Broker（如 EMQX、Mosquitto）
+- 心知天气 API Key（可选，用于天气查询）
+
+### 安装
 
 ```bash
-# You need ESP-IDF v5.5+ installed first:
+# 安装 ESP-IDF v5.5+
 # https://docs.espressif.com/projects/esp-idf/en/v5.5.2/esp32s3/get-started/
 
-git clone https://github.com/memovai/mimiclaw.git
-cd mimiclaw
+git clone https://github.com/yourusername/magic-bean-firmware.git
+cd magic-bean-firmware
 
 idf.py set-target esp32s3
 ```
 
 <details>
-<summary>Ubuntu Install</summary>
-
-Recommended baseline:
-
-- Ubuntu 22.04/24.04
-- Python >= 3.10
-- CMake >= 3.16
-- Ninja >= 1.10
-- Git >= 2.34
-- flex >= 2.6
-- bison >= 3.8
-- gperf >= 3.1
-- dfu-util >= 0.11
-- `libusb-1.0-0`, `libffi-dev`, `libssl-dev`
-
-Install and build on Ubuntu:
+<summary>Ubuntu 安装</summary>
 
 ```bash
 sudo apt-get update
@@ -84,24 +103,7 @@ sudo apt-get install -y git wget flex bison gperf python3 python3-pip python3-ve
 </details>
 
 <details>
-<summary>macOS Install</summary>
-
-Recommended baseline:
-
-- macOS 12/13/14
-- Xcode Command Line Tools
-- Homebrew
-- Python >= 3.10
-- CMake >= 3.16
-- Ninja >= 1.10
-- Git >= 2.34
-- flex >= 2.6
-- bison >= 3.8
-- gperf >= 3.1
-- dfu-util >= 0.11
-- `libusb`, `libffi`, `openssl`
-
-Install and build on macOS:
+<summary>macOS 安装</summary>
 
 ```bash
 xcode-select --install
@@ -113,213 +115,237 @@ xcode-select --install
 
 </details>
 
-### Configure
+### 配置
 
-MimiClaw uses a **two-layer config** system: build-time defaults in `mimi_secrets.h`, with runtime overrides via the serial CLI. CLI values are stored in NVS flash and take priority over build-time values.
+Magic Bean 使用**两层配置**：`mimi_secrets.h` 提供编译时默认值，串口 CLI 可在运行时覆盖。
 
 ```bash
 cp main/mimi_secrets.h.example main/mimi_secrets.h
 ```
 
-Edit `main/mimi_secrets.h`:
+编辑 `main/mimi_secrets.h`：
 
 ```c
-#define MIMI_SECRET_WIFI_SSID       "YourWiFiName"
-#define MIMI_SECRET_WIFI_PASS       "YourWiFiPassword"
-#define MIMI_SECRET_TG_TOKEN        "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-#define MIMI_SECRET_API_KEY         "sk-ant-api03-xxxxx"
-#define MIMI_SECRET_MODEL_PROVIDER  "anthropic"     // "anthropic" or "openai"
-#define MIMI_SECRET_SEARCH_KEY      ""              // optional: Brave Search API key
-#define MIMI_SECRET_TAVILY_KEY      ""              // optional: Tavily API key (preferred)
-#define MIMI_SECRET_PROXY_HOST      ""              // optional: e.g. "10.0.0.1"
-#define MIMI_SECRET_PROXY_PORT      ""              // optional: e.g. "7897"
+/* 基础配置 */
+#define MIMI_SECRET_WIFI_SSID       "你的WiFi名"
+#define MIMI_SECRET_WIFI_PASS       "你的WiFi密码"
+#define MIMI_SECRET_TG_TOKEN        "你的Telegram Bot Token"
+#define MIMI_SECRET_API_KEY         "你的API Key"
+#define MIMI_SECRET_MODEL_PROVIDER  "anthropic"     // "anthropic" 或 "openai"
+
+/* MQTT 配置 */
+#define MIMI_SECRET_MQTT_BROKER     "broker.emqx.io"   // MQTT Broker 地址
+#define MIMI_SECRET_MQTT_PORT       "1883"              // MQTT 端口
+#define MIMI_SECRET_MQTT_USERNAME   ""                  // MQTT 用户名（可选）
+#define MIMI_SECRET_MQTT_PASSWORD   ""                  // MQTT 密码（可选）
+#define MIMI_SECRET_MQTT_CLIENT_ID  ""                  // 客户端 ID，留空自动生成 plant_<MAC>
+
+/* 图片上传 */
+#define MIMI_SECRET_UPLOAD_API_URL  "https://your-server.com/upload"  // 图片上传服务器
+
+/* 可选配置 */
+#define MIMI_SECRET_SEARCH_KEY      ""              // Brave Search API Key
+#define MIMI_SECRET_TAVILY_KEY      ""              // Tavily API Key（优先）
+#define MIMI_SECRET_PROXY_HOST      ""              // 代理地址
+#define MIMI_SECRET_PROXY_PORT      ""              // 代理端口
 ```
 
-Then build and flash:
+编译烧录：
 
 ```bash
-# Clean build (required after any mimi_secrets.h change)
+# 完整编译（修改 mimi_secrets.h 后必须 fullclean）
 idf.py fullclean && idf.py build
 
-# Find your serial port
-ls /dev/cu.usb*          # macOS
-ls /dev/ttyACM*          # Linux
-
-# Flash and monitor (replace PORT with your port)
-# USB adapter: likely /dev/cu.usbmodem11401 (macOS) or /dev/ttyACM0 (Linux)
+# 烧录并监控
 idf.py -p PORT flash monitor
 ```
 
-> **Important: Plug into the correct USB port!** Most ESP32-S3 boards have two USB-C ports. You must use the one labeled **USB** (native USB Serial/JTAG), **not** the one labeled **COM** (external UART bridge). Plugging into the wrong port will cause flash/monitor failures.
->
-> <details>
-> <summary>Show reference photo</summary>
->
-> <img src="assets/esp32s3-usb-port.jpg" alt="Plug into the USB port, not COM" width="480" />
->
-> </details>
+## MQTT 物联网通信
 
-### CLI Commands (via UART/COM port)
+Magic Bean 实现了完整的 MQTT 通信协议，支持远程监控和控制。
 
-Connect via serial to configure or debug. **Config commands** let you change settings without recompiling — just plug in a USB cable anywhere.
+### 主题结构
 
-**Runtime config** (saved to NVS, overrides build-time defaults):
+所有主题基于设备 MAC 地址自动生成：
 
 ```
-mimi> wifi_set MySSID MyPassword   # change WiFi network
-mimi> set_tg_token 123456:ABC...   # change Telegram bot token
-mimi> set_api_key sk-ant-api03-... # change API key (Anthropic or OpenAI)
-mimi> set_model_provider openai    # switch provider (anthropic|openai)
-mimi> set_model gpt-4o             # change LLM model
-mimi> set_proxy 127.0.0.1 7897  # set HTTP proxy
-mimi> clear_proxy                  # remove proxy
-mimi> set_search_key BSA...        # set Brave Search API key
-mimi> set_tavily_key tvly-...      # set Tavily API key (preferred)
-mimi> config_show                  # show all config (masked)
-mimi> config_reset                 # clear NVS, revert to build-time defaults
+plant/{MAC}/status    # 设备在线状态（LWT 机制）
+plant/{MAC}/data      # 传感器数据发布（温湿度、土壤湿度）
+plant/{MAC}/cmd       # 远程控制命令（浇水、拍照）
+plant/{MAC}/debug     # 调试命令
+plant/{MAC}/log       # 远程日志输出
 ```
 
-**Debug & maintenance:**
+### 数据格式
 
-```
-mimi> wifi_status              # am I connected?
-mimi> memory_read              # see what the bot remembers
-mimi> memory_write "content"   # write to MEMORY.md
-mimi> heap_info                # how much RAM is free?
-mimi> session_list             # list all chat sessions
-mimi> session_clear 12345      # wipe a conversation
-mimi> heartbeat_trigger           # manually trigger a heartbeat check
-mimi> cron_start                  # start cron scheduler now
-mimi> restart                     # reboot
+**传感器数据 (plant/{MAC}/data)**：
+```json
+{
+  "temperature": 25.6,
+  "humidity": 65.2,
+  "soil_moisture": 45.8,
+  "timestamp": 1706123456
+}
 ```
 
-### USB (JTAG) vs UART: Which Port for What
+**控制命令 (plant/{MAC}/cmd)**：
+```json
+// 浇水命令
+{
+  "action": "water",
+  "duration": 5000  // 浇水时长（毫秒）
+}
 
-Most ESP32-S3 dev boards expose **two USB-C ports**:
-
-| Port | Use for |
-|------|---------|
-| **USB** (JTAG) | `idf.py flash`, JTAG debugging |
-| **COM** (UART) | **REPL CLI**, serial console |
-
-> **REPL requires the UART (COM) port.** The USB (JTAG) port does not support interactive REPL input.
-
-<details>
-<summary>Port details & recommended workflow</summary>
-
-| Port | Label | Protocol |
-|------|-------|----------|
-| **USB** | USB / JTAG | Native USB Serial/JTAG |
-| **COM** | UART / COM | External UART bridge (CP2102/CH340) |
-
-The ESP-IDF console/REPL is configured to use UART by default (`CONFIG_ESP_CONSOLE_UART_DEFAULT=y`).
-
-**If you have both ports connected simultaneously:**
-
-- USB (JTAG) handles flash/download and provides secondary serial output
-- UART (COM) provides the primary interactive console for the REPL
-- macOS: both appear as `/dev/cu.usbmodem*` or `/dev/cu.usbserial-*` — run `ls /dev/cu.usb*` to identify
-- Linux: USB (JTAG) → `/dev/ttyACM0`, UART → `/dev/ttyUSB0`
-
-**Recommended workflow:**
-
-```bash
-# Flash via USB (JTAG) port
-idf.py -p /dev/cu.usbmodem11401 flash
-
-# Open REPL via UART (COM) port
-idf.py -p /dev/cu.usbserial-110 monitor
-# or use any serial terminal: screen, minicom, PuTTY at 115200 baud
+// 拍照命令
+{
+  "action": "photo"
+}
 ```
 
-</details>
+### 数据发布策略
 
-## Memory
+- 每个整点（xx:00）和半点（xx:30）自动发布传感器数据
+- 收到控制命令后立即执行并反馈结果
+- 设备上线/离线通过 LWT 机制自动通知
 
-MimiClaw stores everything as plain text files you can read and edit:
+## AI 工具列表
 
-| File | What it is |
-|------|------------|
-| `SOUL.md` | The bot's personality — edit this to change how it behaves |
-| `USER.md` | Info about you — name, preferences, language |
-| `MEMORY.md` | Long-term memory — things the bot should always remember |
-| `HEARTBEAT.md` | Task list the bot checks periodically and acts on autonomously |
-| `cron.json` | Scheduled jobs — recurring or one-shot tasks created by the AI |
-| `2026-02-05.md` | Daily notes — what happened today |
-| `tg_12345.jsonl` | Chat history — your conversation with the bot |
+Magic Bean 继承了 MimiClaw 的所有工具，并新增了植物养护相关工具：
 
-## Tools
+### 植物养护工具
 
-MimiClaw supports tool calling for both Anthropic and OpenAI — the LLM can call tools during a conversation and loop until the task is done (ReAct pattern).
+| 工具 | 说明 |
+|------|------|
+| `get_indoor_temperature` | 读取 DHT11 温湿度传感器数据 |
+| `get_soil_Humidity` | 读取 MD0504 土壤湿度传感器数据 |
+| `get_camera_image` | 拍照并上传到指定服务器 |
+| `set_rgb_color` | 设置 WS2812 RGB LED 颜色 |
+| `get_weather_now` | 查询当前天气（心知天气 API） |
+| `get_weather_forecast` | 查询 3 天天气预报 |
 
-| Tool | Description |
-|------|-------------|
-| `web_search` | Search the web via Tavily (preferred) or Brave for current information |
-| `get_current_time` | Fetch current date/time via HTTP and set the system clock |
-| `cron_add` | Schedule a recurring or one-shot task (the LLM creates cron jobs on its own) |
-| `cron_list` | List all scheduled cron jobs |
-| `cron_remove` | Remove a cron job by ID |
+### 原有工具
 
-To enable web search, set a [Tavily API key](https://app.tavily.com/home) via `MIMI_SECRET_TAVILY_KEY` (preferred), or a [Brave Search API key](https://brave.com/search/api/) via `MIMI_SECRET_SEARCH_KEY` in `mimi_secrets.h`.
+| 工具 | 说明 |
+|------|------|
+| `web_search` | 通过 Tavily 或 Brave 搜索网页 |
+| `get_current_time` | 获取当前时间并同步系统时钟 |
+| `cron_add` / `cron_list` / `cron_remove` | 定时任务管理 |
+| `read_file` / `write_file` / `edit_file` | 文件操作 |
+| `gpio_write` / `gpio_read` | GPIO 控制 |
 
-## Cron Tasks
+## CLI 命令
 
-MimiClaw has a built-in cron scheduler that lets the AI schedule its own tasks. The LLM can create recurring jobs ("every N seconds") or one-shot jobs ("at unix timestamp") via the `cron_add` tool. When a job fires, its message is injected into the agent loop — so the AI wakes up, processes the task, and responds.
+通过串口连接即可配置和调试。
 
-Jobs are persisted to SPIFFS (`cron.json`) and survive reboots. Example use cases: daily summaries, periodic reminders, scheduled check-ins.
+**运行时配置**：
 
-## Heartbeat
+```
+mimi> wifi_set MySSID MyPassword     # 换 WiFi
+mimi> set_tg_token 123456:ABC...     # 换 Telegram Token
+mimi> set_api_key sk-ant-api03-...   # 换 API Key
+mimi> set_model_provider openai      # 切换 LLM 提供商
+mimi> set_mqtt_broker broker.emqx.io # 设置 MQTT Broker
+mimi> set_mqtt_port 1883             # 设置 MQTT 端口
+mimi> config_show                    # 查看所有配置
+mimi> config_reset                   # 恢复默认配置
+```
 
-The heartbeat service periodically reads `HEARTBEAT.md` from SPIFFS and checks for actionable tasks. If uncompleted items are found (anything that isn't an empty line, a header, or a checked `- [x]` box), it sends a prompt to the agent loop so the AI can act on them autonomously.
+**调试与运维**：
 
-This turns MimiClaw into a proactive assistant — write tasks to `HEARTBEAT.md` and the bot will pick them up on the next heartbeat cycle (default: every 30 minutes).
+```
+mimi> wifi_status              # 查看连接状态
+mimi> memory_read              # 查看记忆内容
+mimi> heap_info                # 查看内存使用
+mimi> session_list             # 列出所有会话
+mimi> heartbeat_trigger        # 手动触发心跳检查
+mimi> restart                  # 重启设备
+```
 
-## Also Included
+## 记忆系统
 
-- **WebSocket gateway** on port 18789 — connect from your LAN with any WebSocket client
-- **OTA updates** — flash new firmware over WiFi, no USB needed
-- **Dual-core** — network I/O and AI processing run on separate CPU cores
-- **HTTP proxy** — CONNECT tunnel support for restricted networks
-- **Multi-provider** — supports both Anthropic (Claude) and OpenAI (GPT), switchable at runtime
-- **Cron scheduler** — the AI can schedule its own recurring and one-shot tasks, persisted across reboots
-- **Heartbeat** — periodically checks a task file and prompts the AI to act autonomously
-- **Tool use** — ReAct agent loop with tool calling for both providers
+所有数据存储为纯文本文件，可直接读取和编辑：
 
-## For Developers
+| 文件 | 说明 |
+|------|------|
+| `SOUL.md` | AI 人格设定 — 编辑它来改变行为方式 |
+| `USER.md` | 用户信息 — 姓名、偏好、语言 |
+| `MEMORY.md` | 长期记忆 — AI 应该一直记住的事 |
+| `HEARTBEAT.md` | 待办清单 — AI 定期检查并自主执行 |
+| `cron.json` | 定时任务 — 周期性或一次性任务 |
+| `*.md` | 每日笔记 — 记录当天事件 |
 
-Technical details live in the `docs/` folder:
+## 典型应用场景
 
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — system design, module map, task layout, memory budget, protocols, flash partitions
-- **[docs/TODO.md](docs/TODO.md)** — feature gap tracker and roadmap
-- **[docs/WIFI_ONBOARDING_AP.md](docs/WIFI_ONBOARDING_AP.md)** — how the local `MimiClaw-XXXX` onboarding/admin AP flow works
-- **[docs/tool-setup/](docs/tool-setup/README.md)** — configuration guides for external service integrations (Tavily, etc.)
+### 1. 自动浇水系统
 
-## Contributing
+AI 根据土壤湿度传感器数据自主决策浇水：
 
-Please read **[CONTRIBUTING.md](CONTRIBUTING.md)** before opening issues or pull requests.
+```
+传感器数据 → AI 分析 → 判断是否需要浇水 → 控制继电器 → 记录浇水日志
+```
 
-## Contributors
+### 2. 定时巡检
 
-Thanks to everyone who has contributed to MimiClaw.
+通过 Cron 设置定时任务，每小时检查植物状态：
 
-<a href="https://github.com/memovai/mimiclaw/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=memovai/mimiclaw" alt="MimiClaw contributors" />
-</a>
+```
+mimi> cron_add "每小时检查一次植物状态，如果土壤湿度低于40%则提醒浇水"
+```
 
-## License
+### 3. 远程监控
+
+通过 MQTT 或 Telegram 随时查看植物状态：
+
+```
+# MQTT 订阅
+mosquitto_sub -h broker.emqx.io -t "plant/+/data"
+
+# Telegram 发送
+"帮我拍一张植物的照片"
+```
+
+### 4. 天气联动
+
+AI 结合天气预报调整养护策略：
+
+```
+"明天要下雨了，今天不需要浇水"
+"连续高温，增加浇水频率"
+```
+
+## 开发者文档
+
+技术细节在 `docs/` 文件夹：
+
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — 系统设计、模块划分、内存分配
+- **[docs/magic-bean/MQTT-support.md](docs/magic-bean/MQTT-support.md)** — MQTT 功能详细说明
+- **[docs/WIFI_ONBOARDING_AP.md](docs/WIFI_ONBOARDING_AP.md)** — WiFi 配网流程
+- **[docs/tool-setup/](docs/tool-setup/README.md)** — 外部服务集成配置
+
+## 与原版 MimiClaw 的区别
+
+| 功能 | MimiClaw | Magic Bean |
+|------|----------|------------|
+| AI Agent 循环 | ✅ | ✅ |
+| Telegram/飞书 | ✅ | ✅ |
+| WebSocket 网关 | ✅ | ✅ |
+| MQTT 物联网 | ❌ | ✅ |
+| 摄像头拍照 | ❌ | ✅ |
+| 温湿度传感器 | ❌ | ✅ |
+| 土壤湿度传感器 | ❌ | ✅ |
+| RGB LED 控制 | ❌ | ✅ |
+| 天气查询 | ❌ | ✅ |
+| 植物养护优化 | ❌ | ✅ |
+
+## 致谢
+
+- 基于 [MimiClaw](https://github.com/memovai/mimiclaw) 二次开发
+- 灵感来自 [OpenClaw](https://github.com/openclaw/openclaw) 和 [Nanobot](https://github.com/HKUDS/nanobot)
+
+## 许可证
 
 MIT
 
-## Acknowledgments
+---
 
-Inspired by [OpenClaw](https://github.com/openclaw/openclaw) and [Nanobot](https://github.com/HKUDS/nanobot). MimiClaw reimplements the core AI agent architecture for embedded hardware — no Linux, no server, just a $5 chip.
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=memovai%2Fmimiclaw&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=memovai/mimiclaw&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=memovai/mimiclaw&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=memovai/mimiclaw&type=date&legend=top-left" />
- </picture>
-</a>
+*让每一株植物都能享受 AI 的呵护* 🌱

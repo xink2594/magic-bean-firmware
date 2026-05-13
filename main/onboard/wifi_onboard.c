@@ -78,6 +78,81 @@ static void json_add_effective_config_u16(cJSON *root, const char *json_key,
     cJSON_AddStringToObject(root, json_key, value);
 }
 
+static bool split_mqtt_uri(const char *uri, char *broker, size_t broker_size, char *port, size_t port_size)
+{
+    if (!uri || uri[0] == '\0') {
+        return false;
+    }
+
+    const char *start = uri;
+    if (strncmp(start, "mqtt://", 7) == 0) {
+        start += 7;
+    }
+
+    const char *colon = strrchr(start, ':');
+    if (colon && colon > start && *(colon + 1) != '\0') {
+        size_t host_len = (size_t)(colon - start);
+        if (host_len >= broker_size) {
+            host_len = broker_size - 1;
+        }
+        memcpy(broker, start, host_len);
+        broker[host_len] = '\0';
+        strlcpy(port, colon + 1, port_size);
+    } else {
+        strlcpy(broker, start, broker_size);
+    }
+
+    return broker[0] != '\0';
+}
+
+static void json_add_mqtt_config(cJSON *root)
+{
+    char broker[192] = {0};
+    char port[8] = {0};
+
+    nvs_handle_t nvs;
+    if (nvs_open(MIMI_NVS_MQTT, NVS_READONLY, &nvs) == ESP_OK) {
+        size_t len = sizeof(broker);
+        nvs_get_str(nvs, MIMI_NVS_KEY_MQTT_BROKER, broker, &len);
+        len = sizeof(port);
+        nvs_get_str(nvs, MIMI_NVS_KEY_MQTT_PORT, port, &len);
+
+        if (broker[0] == '\0') {
+            char legacy_uri[256] = {0};
+            len = sizeof(legacy_uri);
+            if (nvs_get_str(nvs, MIMI_NVS_KEY_MQTT_BROKER_URI, legacy_uri, &len) == ESP_OK) {
+                split_mqtt_uri(legacy_uri, broker, sizeof(broker), port, sizeof(port));
+            }
+        }
+        nvs_close(nvs);
+    }
+
+    if (broker[0] == '\0') {
+        strlcpy(broker, MIMI_SECRET_MQTT_BROKER, sizeof(broker));
+    }
+    if (broker[0] == '\0') {
+        split_mqtt_uri(MIMI_SECRET_MQTT_BROKER_URI, broker, sizeof(broker), port, sizeof(port));
+    }
+    if (strncmp(broker, "mqtt://", 7) == 0 || strchr(broker, ':') != NULL) {
+        char normalized_broker[192] = {0};
+        char normalized_port[8] = {0};
+        split_mqtt_uri(broker, normalized_broker, sizeof(normalized_broker),
+                       normalized_port, sizeof(normalized_port));
+        if (normalized_broker[0] != '\0') {
+            strlcpy(broker, normalized_broker, sizeof(broker));
+        }
+        if (normalized_port[0] != '\0') {
+            strlcpy(port, normalized_port, sizeof(port));
+        }
+    }
+    if (port[0] == '\0') {
+        strlcpy(port, MIMI_SECRET_MQTT_PORT, sizeof(port));
+    }
+
+    cJSON_AddStringToObject(root, "mqtt_broker", broker);
+    cJSON_AddStringToObject(root, "mqtt_port", port);
+}
+
 /* ── DNS hijack ─────────────────────────────────────────────────── */
 
 /* Minimal DNS response: always answer 192.168.4.1 */
@@ -236,7 +311,7 @@ static esp_err_t http_get_config(httpd_req_t *req)
     json_add_effective_config(root, "proxy_type", MIMI_NVS_PROXY, MIMI_NVS_KEY_PROXY_TYPE, MIMI_SECRET_PROXY_TYPE);
     json_add_effective_config(root, "search_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_API_KEY, MIMI_SECRET_SEARCH_KEY);
     json_add_effective_config(root, "tavily_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_TAVILY_KEY, MIMI_SECRET_TAVILY_KEY);
-    json_add_effective_config(root, "mqtt_broker_uri", MIMI_NVS_MQTT, MIMI_NVS_KEY_MQTT_BROKER_URI, MIMI_SECRET_MQTT_BROKER_URI);
+    json_add_mqtt_config(root);
     json_add_effective_config(root, "upload_api_url", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_API_URL, MIMI_SECRET_UPLOAD_API_URL);
 
     char mac[13] = {0};
@@ -375,14 +450,20 @@ static esp_err_t http_post_save(httpd_req_t *req)
     nvs_sync_field(root, "tavily_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_TAVILY_KEY);
 
     /* MQTT */
-    nvs_sync_field(root, "mqtt_broker_uri", MIMI_NVS_MQTT, MIMI_NVS_KEY_MQTT_BROKER_URI);
+    nvs_sync_field(root, "mqtt_broker", MIMI_NVS_MQTT, MIMI_NVS_KEY_MQTT_BROKER);
+    nvs_sync_field(root, "mqtt_port", MIMI_NVS_MQTT, MIMI_NVS_KEY_MQTT_PORT);
 
     /* Upload */
     nvs_sync_field(root, "upload_api_url", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_API_URL);
 
     char mac[13] = {0};
     get_sta_mac_string(mac, sizeof(mac));
-    const char *mqtt = cJSON_GetStringValue(cJSON_GetObjectItem(root, "mqtt_broker_uri"));
+    const char *mqtt = cJSON_GetStringValue(cJSON_GetObjectItem(root, "mqtt_broker"));
+    char mqtt_broker[192] = {0};
+    char mqtt_port_unused[8] = {0};
+    if (mqtt) {
+        split_mqtt_uri(mqtt, mqtt_broker, sizeof(mqtt_broker), mqtt_port_unused, sizeof(mqtt_port_unused));
+    }
 
     cJSON *resp = cJSON_CreateObject();
     if (!resp) {
@@ -392,7 +473,7 @@ static esp_err_t http_post_save(httpd_req_t *req)
     }
     cJSON_AddBoolToObject(resp, "ok", true);
     cJSON_AddStringToObject(resp, "mac", mac);
-    cJSON_AddStringToObject(resp, "mqtt", mqtt ? mqtt : "");
+    cJSON_AddStringToObject(resp, "mqtt", mqtt_broker);
 
     char *response = cJSON_PrintUnformatted(resp);
     cJSON_Delete(resp);

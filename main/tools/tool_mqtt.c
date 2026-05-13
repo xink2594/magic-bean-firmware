@@ -44,6 +44,8 @@ static char s_data_topic[MQTT_TOPIC_LEN];
 static char s_cmd_topic[MQTT_TOPIC_LEN];
 static char s_debug_topic[MQTT_TOPIC_LEN];
 static char s_log_topic[MQTT_TOPIC_LEN];
+static char s_broker[192];
+static char s_port[8];
 static char s_broker_uri[256];
 static char s_username[128];
 static char s_password[128];
@@ -77,10 +79,62 @@ static void load_config_string(const char *key, const char *build_value, char *o
     }
 }
 
+static void split_legacy_uri(const char *uri, char *broker, size_t broker_size, char *port, size_t port_size)
+{
+    const char *start = uri;
+    if (strncmp(start, "mqtt://", 7) == 0) {
+        start += 7;
+    }
+
+    const char *colon = strrchr(start, ':');
+    if (colon && colon > start && *(colon + 1) != '\0') {
+        size_t host_len = (size_t)(colon - start);
+        if (host_len >= broker_size) {
+            host_len = broker_size - 1;
+        }
+        memcpy(broker, start, host_len);
+        broker[host_len] = '\0';
+        strlcpy(port, colon + 1, port_size);
+    } else {
+        strlcpy(broker, start, broker_size);
+    }
+}
+
 static void load_mqtt_config(void)
 {
-    load_config_string(MIMI_NVS_KEY_MQTT_BROKER_URI, MIMI_SECRET_MQTT_BROKER_URI,
-                       s_broker_uri, sizeof(s_broker_uri));
+    load_config_string(MIMI_NVS_KEY_MQTT_BROKER, MIMI_SECRET_MQTT_BROKER,
+                       s_broker, sizeof(s_broker));
+    load_config_string(MIMI_NVS_KEY_MQTT_PORT, MIMI_SECRET_MQTT_PORT,
+                       s_port, sizeof(s_port));
+
+    if (s_broker[0] == '\0') {
+        char legacy_uri[256] = {0};
+        load_config_string(MIMI_NVS_KEY_MQTT_BROKER_URI, MIMI_SECRET_MQTT_BROKER_URI,
+                           legacy_uri, sizeof(legacy_uri));
+        if (legacy_uri[0] != '\0') {
+            split_legacy_uri(legacy_uri, s_broker, sizeof(s_broker), s_port, sizeof(s_port));
+        }
+    }
+    if (strncmp(s_broker, "mqtt://", 7) == 0 || strchr(s_broker, ':') != NULL) {
+        char normalized_broker[192] = {0};
+        char normalized_port[8] = {0};
+        split_legacy_uri(s_broker, normalized_broker, sizeof(normalized_broker),
+                         normalized_port, sizeof(normalized_port));
+        if (normalized_broker[0] != '\0') {
+            strlcpy(s_broker, normalized_broker, sizeof(s_broker));
+        }
+        if (normalized_port[0] != '\0') {
+            strlcpy(s_port, normalized_port, sizeof(s_port));
+        }
+    }
+
+    if (s_broker[0] != '\0') {
+        const char *port = s_port[0] ? s_port : "1883";
+        snprintf(s_broker_uri, sizeof(s_broker_uri), "mqtt://%s:%s", s_broker, port);
+    } else {
+        s_broker_uri[0] = '\0';
+    }
+
     load_config_string(MIMI_NVS_KEY_MQTT_USERNAME, MIMI_SECRET_MQTT_USERNAME,
                        s_username, sizeof(s_username));
     load_config_string(MIMI_NVS_KEY_MQTT_PASSWORD, MIMI_SECRET_MQTT_PASSWORD,

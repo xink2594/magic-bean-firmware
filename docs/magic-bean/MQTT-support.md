@@ -7,13 +7,14 @@
 MQTT 通过 `main/mimi_secrets.h` 进行编译期配置。
 
 ```c
-#define MIMI_SECRET_MQTT_BROKER_URI "mqtt://broker.example.com:1883"
+#define MIMI_SECRET_MQTT_BROKER "broker.example.com"
+#define MIMI_SECRET_MQTT_PORT "1883"
 #define MIMI_SECRET_MQTT_USERNAME ""
 #define MIMI_SECRET_MQTT_PASSWORD ""
 #define MIMI_SECRET_MQTT_CLIENT_ID ""  /* 为空时使用 plant_<MAC> */
 ```
 
-如果 `MIMI_SECRET_MQTT_BROKER_URI` 为空，则 MQTT 功能不会启动。
+固件运行时会拼接成 `mqtt://{broker}:{port}`。如果 `MIMI_SECRET_MQTT_BROKER` 为空，则 MQTT 功能不会启动。
 
 设备 MAC 地址格式为 12 位大写十六进制字符，不包含冒号或短横线，例如 `AABBCCDDEEFF`。
 
