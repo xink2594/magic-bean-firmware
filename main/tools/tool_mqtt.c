@@ -180,9 +180,16 @@ typedef struct {
     esp_err_t soil_err;
 } mqtt_sensor_data_t;
 
+#define SENSOR_INVALID_VALUE -999.0f
+
 static void read_sensor_data(mqtt_sensor_data_t *data)
 {
     memset(data, 0, sizeof(*data));
+
+    // 初始化为无效值，如果读取失败会保留这些值
+    data->temperature = SENSOR_INVALID_VALUE;
+    data->air_humidity = SENSOR_INVALID_VALUE;
+    data->dirt_humidity = SENSOR_INVALID_VALUE;
 
     data->dht_err = dht_read_float_data(DHT_TYPE_DHT11,
                                         (gpio_num_t)MQTT_DHT11_GPIO,
@@ -190,11 +197,15 @@ static void read_sensor_data(mqtt_sensor_data_t *data)
                                         &data->temperature);
     if (data->dht_err != ESP_OK) {
         ESP_LOGW(TAG, "DHT11 read failed for MQTT data: %s", esp_err_to_name(data->dht_err));
+        // 保持为 INVALID_VALUE
+        data->temperature = SENSOR_INVALID_VALUE;
+        data->air_humidity = SENSOR_INVALID_VALUE;
     }
 
     data->soil_err = tool_md0504_read(&data->dirt_humidity, &data->soil_raw);
     if (data->soil_err != ESP_OK) {
         ESP_LOGW(TAG, "MD0504 read failed for MQTT data: %s", esp_err_to_name(data->soil_err));
+        data->dirt_humidity = SENSOR_INVALID_VALUE;
     }
 }
 
