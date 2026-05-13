@@ -118,7 +118,7 @@ static void get_upload_api_url(char *url, size_t url_size)
         // 确保路径以斜杠开头
         if (path[0] != '/')
         {
-            char temp[64];
+            char temp[128];
             snprintf(temp, sizeof(temp), "/%s", path);
             strlcpy(path, temp, sizeof(path));
         }
