@@ -312,7 +312,8 @@ static esp_err_t http_get_config(httpd_req_t *req)
     json_add_effective_config(root, "search_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_API_KEY, MIMI_SECRET_SEARCH_KEY);
     json_add_effective_config(root, "tavily_key", MIMI_NVS_SEARCH, MIMI_NVS_KEY_TAVILY_KEY, MIMI_SECRET_TAVILY_KEY);
     json_add_mqtt_config(root);
-    json_add_effective_config(root, "upload_api_url", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_API_URL, MIMI_SECRET_UPLOAD_API_URL);
+    json_add_effective_config(root, "upload_backend_url", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_BACKEND_URL, MIMI_SECRET_UPLOAD_BACKEND_URL);
+    json_add_effective_config(root, "upload_api_path", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_API_PATH, MIMI_SECRET_UPLOAD_API_PATH);
 
     char mac[13] = {0};
     get_sta_mac_string(mac, sizeof(mac));
@@ -454,7 +455,8 @@ static esp_err_t http_post_save(httpd_req_t *req)
     nvs_sync_field(root, "mqtt_port", MIMI_NVS_MQTT, MIMI_NVS_KEY_MQTT_PORT);
 
     /* Upload */
-    nvs_sync_field(root, "upload_api_url", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_API_URL);
+    nvs_sync_field(root, "upload_backend_url", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_BACKEND_URL);
+    nvs_sync_field(root, "upload_api_path", MIMI_NVS_UPLOAD, MIMI_NVS_KEY_UPLOAD_API_PATH);
 
     char mac[13] = {0};
     get_sta_mac_string(mac, sizeof(mac));
@@ -474,6 +476,12 @@ static esp_err_t http_post_save(httpd_req_t *req)
     cJSON_AddBoolToObject(resp, "ok", true);
     cJSON_AddStringToObject(resp, "mac", mac);
     cJSON_AddStringToObject(resp, "mqtt", mqtt_broker);
+
+    /* 添加后端地址到响应 */
+    const char *backend_url = cJSON_GetStringValue(cJSON_GetObjectItem(root, "upload_backend_url"));
+    if (backend_url && backend_url[0] != '\0') {
+        cJSON_AddStringToObject(resp, "backend_url", backend_url);
+    }
 
     char *response = cJSON_PrintUnformatted(resp);
     cJSON_Delete(resp);

@@ -39,10 +39,49 @@ static SemaphoreHandle_t s_camera_mutex = NULL;
 // 用于 HTTP 上传的表单边界
 #define UPLOAD_BOUNDARY "----MimiCameraUploadBoundary7MA4YWxkTrZu0gW"
 
+static void get_upload_backend_url(char *url, size_t url_size)
+{
+    url[0] = '\0';
+
+    nvs_handle_t nvs;
+    if (nvs_open(MIMI_NVS_UPLOAD, NVS_READONLY, &nvs) == ESP_OK)
+    {
+        size_t len = url_size;
+        if (nvs_get_str(nvs, MIMI_NVS_KEY_UPLOAD_BACKEND_URL, url, &len) == ESP_OK && url[0] != '\0')
+        {
+            nvs_close(nvs);
+            return;
+        }
+        nvs_close(nvs);
+    }
+
+    strlcpy(url, MIMI_SECRET_UPLOAD_BACKEND_URL, url_size);
+}
+
+static void get_upload_api_path(char *path, size_t path_size)
+{
+    path[0] = '\0';
+
+    nvs_handle_t nvs;
+    if (nvs_open(MIMI_NVS_UPLOAD, NVS_READONLY, &nvs) == ESP_OK)
+    {
+        size_t len = path_size;
+        if (nvs_get_str(nvs, MIMI_NVS_KEY_UPLOAD_API_PATH, path, &len) == ESP_OK && path[0] != '\0')
+        {
+            nvs_close(nvs);
+            return;
+        }
+        nvs_close(nvs);
+    }
+
+    strlcpy(path, MIMI_SECRET_UPLOAD_API_PATH, path_size);
+}
+
 static void get_upload_api_url(char *url, size_t url_size)
 {
     url[0] = '\0';
 
+    // 优先使用旧版完整 URL（兼容）
     nvs_handle_t nvs;
     if (nvs_open(MIMI_NVS_UPLOAD, NVS_READONLY, &nvs) == ESP_OK)
     {
@@ -55,7 +94,37 @@ static void get_upload_api_url(char *url, size_t url_size)
         nvs_close(nvs);
     }
 
-    strlcpy(url, MIMI_SECRET_UPLOAD_API_URL, url_size);
+    if (MIMI_SECRET_UPLOAD_API_URL[0] != '\0')
+    {
+        strlcpy(url, MIMI_SECRET_UPLOAD_API_URL, url_size);
+        return;
+    }
+
+    // 拼接后端地址 + 接口路径
+    char backend[128] = {0};
+    char path[64] = {0};
+    get_upload_backend_url(backend, sizeof(backend));
+    get_upload_api_path(path, sizeof(path));
+
+    if (backend[0] != '\0')
+    {
+        // 移除后端地址末尾的斜杠
+        size_t backend_len = strlen(backend);
+        if (backend_len > 0 && backend[backend_len - 1] == '/')
+        {
+            backend[backend_len - 1] = '\0';
+        }
+
+        // 确保路径以斜杠开头
+        if (path[0] != '/')
+        {
+            char temp[64];
+            snprintf(temp, sizeof(temp), "/%s", path);
+            strlcpy(path, temp, sizeof(path));
+        }
+
+        snprintf(url, url_size, "%s%s", backend, path);
+    }
 }
 
 static esp_err_t tool_camera_hw_init(void)
@@ -300,9 +369,40 @@ esp_err_t tool_camera_execute(const char *input_json, char *output, size_t outpu
                     cJSON *url = cJSON_GetObjectItem(data, "url");
                     if (url && cJSON_IsString(url))
                     {
-                        // 成功！将获取到的 URL 告知大模型
-                        snprintf(output, output_size, "Photo successfully taken and uploaded. Image URL: %s", url->valuestring);
-                        ESP_LOGI(TAG, "Upload Success! URL: %s", url->valuestring);
+                        // 构建完整 URL（后端地址 + 图片路径）
+                        char backend[128] = {0};
+                        get_upload_backend_url(backend, sizeof(backend));
+
+                        char full_url[512] = {0};
+                        if (backend[0] != '\0')
+                        {
+                            // 移除后端地址末尾的斜杠
+                            size_t backend_len = strlen(backend);
+                            if (backend_len > 0 && backend[backend_len - 1] == '/')
+                            {
+                                backend[backend_len - 1] = '\0';
+                            }
+
+                            // 确保图片路径以斜杠开头
+                            const char *img_path = url->valuestring;
+                            if (img_path[0] != '/')
+                            {
+                                snprintf(full_url, sizeof(full_url), "%s/%s", backend, img_path);
+                            }
+                            else
+                            {
+                                snprintf(full_url, sizeof(full_url), "%s%s", backend, img_path);
+                            }
+                        }
+                        else
+                        {
+                            // 如果没有配置后端地址，使用原始 URL
+                            strlcpy(full_url, url->valuestring, sizeof(full_url));
+                        }
+
+                        // 成功！将获取到的完整 URL 告知大模型
+                        snprintf(output, output_size, "Photo successfully taken and uploaded. Image URL: %s", full_url);
+                        ESP_LOGI(TAG, "Upload Success! URL: %s", full_url);
                         cJSON_Delete(root);
                         err = ESP_OK;
                         goto cleanup;
