@@ -181,30 +181,55 @@ typedef struct {
 } mqtt_sensor_data_t;
 
 #define SENSOR_INVALID_VALUE -999.0f
+#define SENSOR_RETRY_COUNT 3
+#define SENSOR_RETRY_DELAY_MS 500
 
 static void read_sensor_data(mqtt_sensor_data_t *data)
 {
     memset(data, 0, sizeof(*data));
 
-    // 初始化为无效值，如果读取失败会保留这些值
+    // 初始化为无效值
     data->temperature = SENSOR_INVALID_VALUE;
     data->air_humidity = SENSOR_INVALID_VALUE;
     data->dirt_humidity = SENSOR_INVALID_VALUE;
 
-    data->dht_err = dht_read_float_data(DHT_TYPE_DHT11,
-                                        (gpio_num_t)MQTT_DHT11_GPIO,
-                                        &data->air_humidity,
-                                        &data->temperature);
+    // DHT11 重试读取
+    for (int i = 0; i < SENSOR_RETRY_COUNT; i++) {
+        data->dht_err = dht_read_float_data(DHT_TYPE_DHT11,
+                                            (gpio_num_t)MQTT_DHT11_GPIO,
+                                            &data->air_humidity,
+                                            &data->temperature);
+        if (data->dht_err == ESP_OK) {
+            ESP_LOGI(TAG, "DHT11 read success on attempt %d: temp=%.1fC humidity=%.1f%%",
+                     i + 1, data->temperature, data->air_humidity);
+            break;
+        }
+        ESP_LOGW(TAG, "DHT11 read attempt %d failed: %s", i + 1, esp_err_to_name(data->dht_err));
+        if (i < SENSOR_RETRY_COUNT - 1) {
+            vTaskDelay(pdMS_TO_TICKS(SENSOR_RETRY_DELAY_MS));
+        }
+    }
     if (data->dht_err != ESP_OK) {
-        ESP_LOGW(TAG, "DHT11 read failed for MQTT data: %s", esp_err_to_name(data->dht_err));
-        // 保持为 INVALID_VALUE
+        ESP_LOGE(TAG, "DHT11 read failed after %d attempts", SENSOR_RETRY_COUNT);
         data->temperature = SENSOR_INVALID_VALUE;
         data->air_humidity = SENSOR_INVALID_VALUE;
     }
 
-    data->soil_err = tool_md0504_read(&data->dirt_humidity, &data->soil_raw);
+    // MD0504 重试读取
+    for (int i = 0; i < SENSOR_RETRY_COUNT; i++) {
+        data->soil_err = tool_md0504_read(&data->dirt_humidity, &data->soil_raw);
+        if (data->soil_err == ESP_OK) {
+            ESP_LOGI(TAG, "MD0504 read success on attempt %d: soil=%.1f%%",
+                     i + 1, data->dirt_humidity);
+            break;
+        }
+        ESP_LOGW(TAG, "MD0504 read attempt %d failed: %s", i + 1, esp_err_to_name(data->soil_err));
+        if (i < SENSOR_RETRY_COUNT - 1) {
+            vTaskDelay(pdMS_TO_TICKS(SENSOR_RETRY_DELAY_MS));
+        }
+    }
     if (data->soil_err != ESP_OK) {
-        ESP_LOGW(TAG, "MD0504 read failed for MQTT data: %s", esp_err_to_name(data->soil_err));
+        ESP_LOGE(TAG, "MD0504 read failed after %d attempts", SENSOR_RETRY_COUNT);
         data->dirt_humidity = SENSOR_INVALID_VALUE;
     }
 }
