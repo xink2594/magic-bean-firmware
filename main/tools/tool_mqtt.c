@@ -42,6 +42,7 @@ static char s_client_id[MQTT_CLIENT_ID_LEN];
 static char s_status_topic[MQTT_TOPIC_LEN];
 static char s_data_topic[MQTT_TOPIC_LEN];
 static char s_cmd_topic[MQTT_TOPIC_LEN];
+static char s_response_topic[MQTT_TOPIC_LEN];
 static char s_debug_topic[MQTT_TOPIC_LEN];
 static char s_log_topic[MQTT_TOPIC_LEN];
 static char s_broker[192];
@@ -150,6 +151,7 @@ static void init_topics(void)
     snprintf(s_status_topic, sizeof(s_status_topic), "plant/%s/status", s_mac);
     snprintf(s_data_topic, sizeof(s_data_topic), "plant/%s/data", s_mac);
     snprintf(s_cmd_topic, sizeof(s_cmd_topic), "plant/%s/cmd", s_mac);
+    snprintf(s_response_topic, sizeof(s_response_topic), "plant/%s/response", s_mac);
     snprintf(s_debug_topic, sizeof(s_debug_topic), "plant/%s/debug", s_mac);
     snprintf(s_log_topic, sizeof(s_log_topic), "plant/%s/log", s_mac);
 
@@ -252,6 +254,52 @@ esp_err_t tool_mqtt_publish_sensor_data(void)
 
     ESP_LOGI(TAG, "MQTT sensor data published: %s", payload);
     return ESP_OK;
+}
+
+esp_err_t tool_mqtt_publish_capture_response(const char *msg_id, const char *image_url)
+{
+    if (!msg_id || !image_url) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 读取当前传感器数据
+    mqtt_sensor_data_t data;
+    read_sensor_data(&data);
+
+    // 构建响应 JSON
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    cJSON_AddStringToObject(root, "msg_id", msg_id);
+    cJSON_AddStringToObject(root, "action_reply", "capture");
+
+    cJSON *data_obj = cJSON_CreateObject();
+    if (!data_obj) {
+        cJSON_Delete(root);
+        return ESP_ERR_NO_MEM;
+    }
+
+    cJSON_AddStringToObject(data_obj, "url", image_url);
+    cJSON_AddNumberToObject(data_obj, "temp", data.temperature);
+    cJSON_AddNumberToObject(data_obj, "humi", data.air_humidity);
+    cJSON_AddNumberToObject(data_obj, "soil", data.dirt_humidity);
+
+    cJSON_AddItemToObject(root, "data", data_obj);
+
+    char *payload = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (!payload) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    esp_err_t err = publish_payload(s_response_topic, payload);
+    ESP_LOGI(TAG, "MQTT capture response published to %s: %s", s_response_topic, payload);
+    free(payload);
+
+    return err;
 }
 
 static esp_err_t publish_debug_sensor_data(void)
@@ -375,6 +423,26 @@ static void command_task(void *arg)
         char output[512] = {0};
         esp_err_t err = tool_camera_execute("{}", output, sizeof(output));
         ESP_LOGI(TAG, "MQTT capture result (%s): %s", esp_err_to_name(err), output);
+
+        // 解析输出获取图片 URL
+        if (err == ESP_OK) {
+            // output 格式: "Photo successfully taken and uploaded. Image URL: https://..."
+            const char *url_prefix = "Image URL: ";
+            const char *url_start = strstr(output, url_prefix);
+            if (url_start) {
+                url_start += strlen(url_prefix);
+                // 提取 URL（到字符串末尾或换行符）
+                char image_url[256] = {0};
+                const char *url_end = strchr(url_start, '\n');
+                size_t url_len = url_end ? (size_t)(url_end - url_start) : strlen(url_start);
+                if (url_len < sizeof(image_url)) {
+                    strncpy(image_url, url_start, url_len);
+                    image_url[url_len] = '\0';
+                    // 发送响应到 MQTT
+                    tool_mqtt_publish_capture_response(msg_id->valuestring, image_url);
+                }
+            }
+        }
     } else {
         ESP_LOGW(TAG, "Unknown MQTT action: %s", action->valuestring);
     }

@@ -172,6 +172,7 @@ Magic Bean 实现了完整的 MQTT 通信协议，支持远程监控和控制。
 plant/{MAC}/status    # 设备在线状态（LWT 机制）
 plant/{MAC}/data      # 传感器数据发布（温湿度、土壤湿度）
 plant/{MAC}/cmd       # 远程控制命令（浇水、拍照）
+plant/{MAC}/response  # 命令执行响应（拍照结果、传感器快照）
 plant/{MAC}/debug     # 调试命令
 plant/{MAC}/log       # 远程日志输出
 ```
@@ -201,6 +202,29 @@ plant/{MAC}/log       # 远程日志输出
   "action": "photo"
 }
 ```
+
+**命令响应 (plant/{MAC}/response)**：
+```json
+// 拍照响应 - 包含图片 URL 和当前传感器快照
+{
+  "msg_id": "cmd_1706123456789",
+  "action_reply": "capture",
+  "data": {
+    "url": "https://your-server.com/uploads/plant_abc123_1706123456.jpg",
+    "temp": 25.6,
+    "humi": 65.2,
+    "soil": 45.8
+  }
+}
+```
+
+字段说明：
+- `msg_id` — 命令消息 ID，用于关联请求和响应
+- `action_reply` — 响应类型，`capture` 表示拍照响应
+- `data.url` — 上传后的图片 URL
+- `data.temp` — 拍照时的温度（℃）
+- `data.humi` — 拍照时的湿度（%）
+- `data.soil` — 拍照时的土壤湿度（%）
 
 ### 数据发布策略
 
