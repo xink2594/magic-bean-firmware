@@ -216,15 +216,29 @@ plant/{MAC}/log       # 远程日志输出
     "soil": 45.8
   }
 }
+
+// 浇水响应 - 包含执行结果
+{
+  "msg_id": "cmd_1706123456789",
+  "action_reply": "water",
+  "data": {
+    "duration": 5,
+    "success": true
+  }
+}
 ```
 
 字段说明：
 - `msg_id` — 命令消息 ID，用于关联请求和响应
-- `action_reply` — 响应类型，`capture` 表示拍照响应
-- `data.url` — 上传后的图片 URL
-- `data.temp` — 拍照时的温度（℃）
-- `data.humi` — 拍照时的湿度（%）
-- `data.soil` — 拍照时的土壤湿度（%）
+- `action_reply` — 响应类型（`capture` 或 `water`）
+- **capture 响应**：
+  - `data.url` — 上传后的图片 URL
+  - `data.temp` — 拍照时的温度（℃）
+  - `data.humi` — 拍照时的湿度（%）
+  - `data.soil` — 拍照时的土壤湿度（%）
+- **water 响应**：
+  - `data.duration` — 实际浇水时长（秒）
+  - `data.success` — 是否执行成功
 
 ### 数据发布策略
 

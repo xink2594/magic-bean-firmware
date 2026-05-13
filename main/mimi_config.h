@@ -67,12 +67,6 @@
 #ifndef MIMI_SECRET_UPLOAD_API_URL
 #define MIMI_SECRET_UPLOAD_API_URL  ""
 #endif
-#ifndef MIMI_SECRET_UPLOAD_BACKEND_URL
-#define MIMI_SECRET_UPLOAD_BACKEND_URL ""
-#endif
-#ifndef MIMI_SECRET_UPLOAD_API_PATH
-#define MIMI_SECRET_UPLOAD_API_PATH "/save"
-#endif
 
 /* WiFi */
 #define MIMI_WIFI_MAX_RETRY          10
@@ -189,8 +183,6 @@
 #define MIMI_NVS_KEY_MQTT_PASSWORD   "password"
 #define MIMI_NVS_KEY_MQTT_CLIENT_ID  "client_id"
 #define MIMI_NVS_KEY_UPLOAD_API_URL  "api_url"
-#define MIMI_NVS_KEY_UPLOAD_BACKEND_URL "backend_url"
-#define MIMI_NVS_KEY_UPLOAD_API_PATH "api_path"
 
 /* WiFi Onboarding (Captive Portal) */
 #define MIMI_ONBOARD_AP_PREFIX    "MimiClaw-"

@@ -454,7 +454,26 @@ static void command_task(void *arg)
                 set_time = (int)set_time_obj->valuedouble;
             }
         }
-        run_water_command(set_time);
+        esp_err_t water_err = run_water_command(set_time);
+        // 发送浇水响应
+        cJSON *water_resp = cJSON_CreateObject();
+        if (water_resp) {
+            cJSON_AddStringToObject(water_resp, "msg_id", msg_id->valuestring);
+            cJSON_AddStringToObject(water_resp, "action_reply", "water");
+            cJSON *water_data = cJSON_CreateObject();
+            if (water_data) {
+                cJSON_AddNumberToObject(water_data, "duration", set_time);
+                cJSON_AddBoolToObject(water_data, "success", water_err == ESP_OK);
+                cJSON_AddItemToObject(water_resp, "data", water_data);
+            }
+            char *water_payload = cJSON_PrintUnformatted(water_resp);
+            cJSON_Delete(water_resp);
+            if (water_payload) {
+                publish_payload(s_response_topic, water_payload);
+                ESP_LOGI(TAG, "Water response published: %s", water_payload);
+                free(water_payload);
+            }
+        }
     } else if (strcmp(action->valuestring, "capture") == 0) {
         char output[512] = {0};
         esp_err_t err = tool_camera_execute("{}", output, sizeof(output));
