@@ -3,6 +3,7 @@
 #include "mimi_config.h"
 #include "tools/tool_camera.h"
 #include "tools/tool_md0504.h"
+#include "tools/tool_rgb.h"
 
 #include "cJSON.h"
 #include "dht.h"
@@ -31,7 +32,7 @@ static const char *TAG = "tool_mqtt";
 #define MQTT_DATA_PRIO 4
 #define MQTT_DATA_CHECK_INTERVAL_MS (5 * 1000)
 #define MQTT_DHT11_GPIO 2
-#define MQTT_WATER_GPIO -1
+#define MQTT_WATER_GPIO 37
 #define MQTT_WATER_ACTIVE_LEVEL 1
 
 static esp_mqtt_client_handle_t s_client;
@@ -45,6 +46,7 @@ static char s_cmd_topic[MQTT_TOPIC_LEN];
 static char s_response_topic[MQTT_TOPIC_LEN];
 static char s_debug_topic[MQTT_TOPIC_LEN];
 static char s_log_topic[MQTT_TOPIC_LEN];
+static char s_light_topic[MQTT_TOPIC_LEN];
 static char s_broker[192];
 static char s_port[8];
 static char s_broker_uri[256];
@@ -55,6 +57,8 @@ typedef struct {
     char *payload;
     int len;
 } mqtt_cmd_t;
+
+static esp_err_t publish_light_state(bool on, uint8_t r, uint8_t g, uint8_t b);
 
 static bool mqtt_enabled(void)
 {
@@ -154,6 +158,7 @@ static void init_topics(void)
     snprintf(s_response_topic, sizeof(s_response_topic), "plant/%s/response", s_mac);
     snprintf(s_debug_topic, sizeof(s_debug_topic), "plant/%s/debug", s_mac);
     snprintf(s_log_topic, sizeof(s_log_topic), "plant/%s/log", s_mac);
+    snprintf(s_light_topic, sizeof(s_light_topic), "plant/%s/light", s_mac);
 
     char configured_client_id[MQTT_CLIENT_ID_LEN] = {0};
     load_config_string(MIMI_NVS_KEY_MQTT_CLIENT_ID, MIMI_SECRET_MQTT_CLIENT_ID,
@@ -498,6 +503,38 @@ static void command_task(void *arg)
                 }
             }
         }
+    } else if (strcmp(action->valuestring, "light") == 0) {
+        uint8_t lr = 255, lg = 255, lb = 255;
+        if (cJSON_IsObject(param)) {
+            cJSON *rv = cJSON_GetObjectItem(param, "r");
+            cJSON *gv = cJSON_GetObjectItem(param, "g");
+            cJSON *bv = cJSON_GetObjectItem(param, "b");
+            if (cJSON_IsNumber(rv)) lr = (uint8_t)((int)rv->valuedouble & 0xFF);
+            if (cJSON_IsNumber(gv)) lg = (uint8_t)((int)gv->valuedouble & 0xFF);
+            if (cJSON_IsNumber(bv)) lb = (uint8_t)((int)bv->valuedouble & 0xFF);
+        }
+        tool_rgb_set_all(lr, lg, lb);
+        publish_light_state(true, lr, lg, lb);
+        ESP_LOGI(TAG, "Grow light ON (%u,%u,%u)", lr, lg, lb);
+    } else if (strcmp(action->valuestring, "led_water") == 0) {
+        int duration = 5;
+        uint8_t wr = 0, wg = 100, wb = 255;
+        if (cJSON_IsObject(param)) {
+            cJSON *st = cJSON_GetObjectItem(param, "set_time");
+            if (cJSON_IsNumber(st)) duration = (int)st->valuedouble;
+            cJSON *rv = cJSON_GetObjectItem(param, "r");
+            cJSON *gv = cJSON_GetObjectItem(param, "g");
+            cJSON *bv = cJSON_GetObjectItem(param, "b");
+            if (cJSON_IsNumber(rv)) wr = (uint8_t)((int)rv->valuedouble & 0xFF);
+            if (cJSON_IsNumber(gv)) wg = (uint8_t)((int)gv->valuedouble & 0xFF);
+            if (cJSON_IsNumber(bv)) wb = (uint8_t)((int)bv->valuedouble & 0xFF);
+        }
+        tool_rgb_water_flow_start(wr, wg, wb, duration);
+        ESP_LOGI(TAG, "LED water flow started for %ds", duration);
+    } else if (strcmp(action->valuestring, "water_stop") == 0) {
+        tool_rgb_stop();
+        publish_light_state(false, 0, 0, 0);
+        ESP_LOGI(TAG, "Water flow stopped by command");
     } else {
         ESP_LOGW(TAG, "Unknown MQTT action: %s", action->valuestring);
     }
@@ -588,6 +625,17 @@ static void handle_debug(const char *payload, int len)
     }
 }
 
+static esp_err_t publish_light_state(bool on, uint8_t r, uint8_t g, uint8_t b)
+{
+    char payload[96];
+    if (on) {
+        snprintf(payload, sizeof(payload), "{\"state\":\"on\",\"r\":%u,\"g\":%u,\"b\":%u}", r, g, b);
+    } else {
+        snprintf(payload, sizeof(payload), "{\"state\":\"off\"}");
+    }
+    return publish_payload(s_light_topic, payload);
+}
+
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     (void)handler_args;
@@ -631,8 +679,9 @@ esp_err_t tool_mqtt_init(void)
     }
 
     tool_md0504_init();
-    ESP_LOGI(TAG, "MQTT topics: status=%s data=%s cmd=%s debug=%s log=%s",
-             s_status_topic, s_data_topic, s_cmd_topic, s_debug_topic, s_log_topic);
+    tool_rgb_init();
+    ESP_LOGI(TAG, "MQTT topics: status=%s data=%s cmd=%s light=%s debug=%s log=%s",
+             s_status_topic, s_data_topic, s_cmd_topic, s_light_topic, s_debug_topic, s_log_topic);
     return ESP_OK;
 }
 

@@ -195,7 +195,7 @@ plant/{MAC}/log       # 远程日志输出
 所有命令包含公共字段：`msg_id`（消息唯一标识，格式 `{MAC}_{timestamp}`）、`action`（动作类型）、`param`（参数对象）、`timestamp`（Unix 时间戳）。
 
 ```json
-// 浇水命令 — param.set_time 为浇水时长（分钟）
+// 浇水命令 — param.set_time 为浇水时长（秒）
 {
   "msg_id": "AABBCCDDEEFF_1747641600",
   "action": "water",
