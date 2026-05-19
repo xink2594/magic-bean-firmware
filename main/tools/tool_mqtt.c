@@ -4,6 +4,7 @@
 #include "tools/tool_camera.h"
 #include "tools/tool_md0504.h"
 #include "tools/tool_rgb.h"
+#include "channels/feishu/feishu_bot.h"
 
 #include "cJSON.h"
 #include "dht.h"
@@ -32,7 +33,7 @@ static const char *TAG = "tool_mqtt";
 #define MQTT_DATA_PRIO 4
 #define MQTT_DATA_CHECK_INTERVAL_MS (5 * 1000)
 #define MQTT_DHT11_GPIO 2
-#define MQTT_WATER_GPIO 37
+#define MQTT_WATER_GPIO -1
 #define MQTT_WATER_ACTIVE_LEVEL 1
 
 static esp_mqtt_client_handle_t s_client;
@@ -52,6 +53,7 @@ static char s_port[8];
 static char s_broker_uri[256];
 static char s_username[128];
 static char s_password[128];
+static char s_admin_id[128];
 
 typedef struct {
     char *payload;
@@ -303,9 +305,19 @@ esp_err_t tool_mqtt_publish_capture_response(const char *msg_id, const char *ima
         return ESP_ERR_INVALID_ARG;
     }
 
-    // 读取当前传感器数据
+    // 读取传感器数据，DHT11 无效时重试
     mqtt_sensor_data_t data;
-    read_sensor_data(&data);
+    for (int attempt = 0; attempt < SENSOR_RETRY_COUNT; attempt++) {
+        read_sensor_data(&data);
+        if (data.temperature != 0 && data.temperature != SENSOR_INVALID_VALUE &&
+            data.air_humidity != 0 && data.air_humidity != SENSOR_INVALID_VALUE) {
+            break;
+        }
+        ESP_LOGW(TAG, "DHT11 data invalid in capture response, retry %d/%d", attempt + 1, SENSOR_RETRY_COUNT);
+        if (attempt < SENSOR_RETRY_COUNT - 1) {
+            vTaskDelay(pdMS_TO_TICKS(SENSOR_RETRY_DELAY_MS));
+        }
+    }
 
     // 构建响应 JSON
     cJSON *root = cJSON_CreateObject();
@@ -372,6 +384,53 @@ static void publish_status(const char *status)
     esp_mqtt_client_publish(s_client, s_status_topic, payload, 0, 1, 1);
 }
 
+static void check_soil_moisture_alarm(float soil_moisture)
+{
+    if (s_admin_id[0] == '\0' || soil_moisture == SENSOR_INVALID_VALUE) {
+        return;
+    }
+
+    /* 读取当前告警状态 */
+    bool alerted = false;
+    nvs_handle_t nvs;
+    if (nvs_open(MIMI_NVS_SOIL_ALARM, NVS_READONLY, &nvs) == ESP_OK) {
+        uint8_t val = 0;
+        if (nvs_get_u8(nvs, MIMI_NVS_KEY_SOIL_ALERTED, &val) == ESP_OK) {
+            alerted = (val != 0);
+        }
+        nvs_close(nvs);
+    }
+
+    if (soil_moisture < MIMI_SOIL_ALARM_THRESHOLD) {
+        if (!alerted) {
+            char msg[128];
+            snprintf(msg, sizeof(msg),
+                     "土壤湿度过低！当前湿度: %.1f%%，阈值: %.1f%%\n请及时浇水。",
+                     soil_moisture, MIMI_SOIL_ALARM_THRESHOLD);
+            esp_err_t err = feishu_send_message(s_admin_id, msg);
+            if (err == ESP_OK) {
+                ESP_LOGW(TAG, "Soil alarm sent to %s (moisture=%.1f%%)", s_admin_id, soil_moisture);
+                /* 标记已告警 */
+                if (nvs_open(MIMI_NVS_SOIL_ALARM, NVS_READWRITE, &nvs) == ESP_OK) {
+                    nvs_set_u8(nvs, MIMI_NVS_KEY_SOIL_ALERTED, 1);
+                    nvs_commit(nvs);
+                    nvs_close(nvs);
+                }
+            } else {
+                ESP_LOGE(TAG, "Failed to send soil alarm: %s", esp_err_to_name(err));
+            }
+        }
+    } else if (alerted) {
+        /* 湿度恢复，清除告警标记 */
+        if (nvs_open(MIMI_NVS_SOIL_ALARM, NVS_READWRITE, &nvs) == ESP_OK) {
+            nvs_set_u8(nvs, MIMI_NVS_KEY_SOIL_ALERTED, 0);
+            nvs_commit(nvs);
+            nvs_close(nvs);
+        }
+        ESP_LOGI(TAG, "Soil moisture recovered (%.1f%%), alarm cleared", soil_moisture);
+    }
+}
+
 static void data_publish_task(void *arg)
 {
     (void)arg;
@@ -390,6 +449,12 @@ static void data_publish_task(void *arg)
                     esp_err_t err = tool_mqtt_publish_sensor_data();
                     ESP_LOGI(TAG, "MQTT scheduled data publish at %02d:%02d:%02d: %s",
                              tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec, esp_err_to_name(err));
+
+                    /* 土壤湿度告警检查 */
+                    mqtt_sensor_data_t alarm_data;
+                    read_sensor_data(&alarm_data);
+                    check_soil_moisture_alarm(alarm_data.dirt_humidity);
+
                     last_slot_key = slot_key;
                 }
             }
@@ -680,6 +745,19 @@ esp_err_t tool_mqtt_init(void)
 
     tool_md0504_init();
     tool_rgb_init();
+
+    /* 飞书管理员 ID */
+    nvs_handle_t nvs_feishu;
+    s_admin_id[0] = '\0';
+    if (nvs_open(MIMI_NVS_FEISHU, NVS_READONLY, &nvs_feishu) == ESP_OK) {
+        size_t len = sizeof(s_admin_id);
+        nvs_get_str(nvs_feishu, MIMI_NVS_KEY_FEISHU_ADMIN_ID, s_admin_id, &len);
+        nvs_close(nvs_feishu);
+    }
+    if (s_admin_id[0] == '\0') {
+        strlcpy(s_admin_id, MIMI_SECRET_FEISHU_ADMIN_ID, sizeof(s_admin_id));
+    }
+
     ESP_LOGI(TAG, "MQTT topics: status=%s data=%s cmd=%s light=%s debug=%s log=%s",
              s_status_topic, s_data_topic, s_cmd_topic, s_light_topic, s_debug_topic, s_log_topic);
     return ESP_OK;

@@ -43,6 +43,9 @@
 #ifndef MIMI_SECRET_FEISHU_APP_SECRET
 #define MIMI_SECRET_FEISHU_APP_SECRET ""
 #endif
+#ifndef MIMI_SECRET_FEISHU_ADMIN_ID
+#define MIMI_SECRET_FEISHU_ADMIN_ID ""
+#endif
 #ifndef MIMI_SECRET_TAVILY_KEY
 #define MIMI_SECRET_TAVILY_KEY      ""
 #endif
@@ -169,6 +172,12 @@
 #define MIMI_NVS_KEY_TG_TOKEN        "bot_token"
 #define MIMI_NVS_KEY_FEISHU_APP_ID   "app_id"
 #define MIMI_NVS_KEY_FEISHU_APP_SECRET "app_secret"
+#define MIMI_NVS_KEY_FEISHU_ADMIN_ID "admin_id"
+
+/* 土壤湿度告警 */
+#define MIMI_SOIL_ALARM_THRESHOLD    20.0f
+#define MIMI_NVS_SOIL_ALARM          "soil_alarm"
+#define MIMI_NVS_KEY_SOIL_ALERTED    "alerted"
 #define MIMI_NVS_KEY_API_KEY         "api_key"
 #define MIMI_NVS_KEY_TAVILY_KEY      "tavily_key"
 #define MIMI_NVS_KEY_MODEL           "model"

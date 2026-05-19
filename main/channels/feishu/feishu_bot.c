@@ -997,6 +997,25 @@ static void handle_message_event(cJSON *event)
              sender_id, chat_id, chat_type, cleaned,
              strlen(cleaned) > 60 ? "..." : "");
 
+    /* 自动保存 p2p 发送者为管理员（用于土壤告警等通知） */
+    if (strcmp(chat_type, "p2p") == 0 && sender_id[0]) {
+        char cur[64] = {0};
+        nvs_handle_t nvs;
+        if (nvs_open(MIMI_NVS_FEISHU, NVS_READONLY, &nvs) == ESP_OK) {
+            size_t len = sizeof(cur);
+            nvs_get_str(nvs, MIMI_NVS_KEY_FEISHU_ADMIN_ID, cur, &len);
+            nvs_close(nvs);
+        }
+        if (strcmp(cur, sender_id) != 0) {
+            if (nvs_open(MIMI_NVS_FEISHU, NVS_READWRITE, &nvs) == ESP_OK) {
+                nvs_set_str(nvs, MIMI_NVS_KEY_FEISHU_ADMIN_ID, sender_id);
+                nvs_commit(nvs);
+                nvs_close(nvs);
+                ESP_LOGI(TAG, "Admin ID auto-saved: %s", sender_id);
+            }
+        }
+    }
+
     /* For p2p (DM) chats, use sender open_id as chat_id for session routing.
      * For group chats, use the chat_id (group ID).
      * This matches the moltbot reference pattern where DMs route by sender. */
