@@ -579,8 +579,13 @@ static void command_task(void *arg)
             if (cJSON_IsNumber(bv)) lb = (uint8_t)((int)bv->valuedouble & 0xFF);
         }
         tool_rgb_set_all(lr, lg, lb);
-        publish_light_state(true, lr, lg, lb);
-        ESP_LOGI(TAG, "Grow light ON (%u,%u,%u)", lr, lg, lb);
+        if (lr == 0 && lg == 0 && lb == 0) {
+            publish_light_state(false, 0, 0, 0);
+            ESP_LOGI(TAG, "Grow light OFF");
+        } else {
+            publish_light_state(true, lr, lg, lb);
+            ESP_LOGI(TAG, "Grow light ON (%u,%u,%u)", lr, lg, lb);
+        }
     } else if (strcmp(action->valuestring, "led_water") == 0) {
         int duration = 5;
         uint8_t wr = 0, wg = 100, wb = 255;
@@ -600,6 +605,9 @@ static void command_task(void *arg)
         tool_rgb_stop();
         publish_light_state(false, 0, 0, 0);
         ESP_LOGI(TAG, "Water flow stopped by command");
+    } else if (strcmp(action->valuestring, "fetch") == 0) {
+        esp_err_t fetch_err = tool_mqtt_publish_sensor_data();
+        ESP_LOGI(TAG, "Manual sensor data fetch: %s", esp_err_to_name(fetch_err));
     } else {
         ESP_LOGW(TAG, "Unknown MQTT action: %s", action->valuestring);
     }
