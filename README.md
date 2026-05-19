@@ -171,8 +171,9 @@ Magic Bean 实现了完整的 MQTT 通信协议，支持远程监控和控制。
 ```
 plant/{MAC}/status    # 设备在线状态（LWT 机制）
 plant/{MAC}/data      # 传感器数据发布（温湿度、土壤湿度）
-plant/{MAC}/cmd       # 远程控制命令（浇水、拍照）
+plant/{MAC}/cmd       # 远程控制命令（浇水、拍照、补光）
 plant/{MAC}/response  # 命令执行响应（拍照结果、传感器快照）
+plant/{MAC}/light     # 补光灯开关状态
 plant/{MAC}/debug     # 调试命令
 plant/{MAC}/log       # 远程日志输出
 ```
@@ -190,16 +191,38 @@ plant/{MAC}/log       # 远程日志输出
 ```
 
 **控制命令 (plant/{MAC}/cmd)**：
+
+所有命令包含公共字段：`msg_id`（消息唯一标识，格式 `{MAC}_{timestamp}`）、`action`（动作类型）、`param`（参数对象）、`timestamp`（Unix 时间戳）。
+
 ```json
-// 浇水命令
+// 浇水命令 — param.set_time 为浇水时长（分钟）
 {
+  "msg_id": "AABBCCDDEEFF_1747641600",
   "action": "water",
-  "duration": 5000  // 浇水时长（毫秒）
+  "param": {
+    "set_time": 5
+  },
+  "timestamp": 1747641600
 }
 
 // 拍照命令
 {
-  "action": "photo"
+  "msg_id": "AABBCCDDEEFF_1747641600",
+  "action": "capture",
+  "param": {},
+  "timestamp": 1747641600
+}
+
+// 补光命令 — param 指定 RGB 颜色，WS2812 灯带全亮
+{
+  "msg_id": "AABBCCDDEEFF_1747641600",
+  "action": "light",
+  "param": {
+    "r": 255,
+    "g": 0,
+    "b": 128
+  },
+  "timestamp": 1747641600
 }
 ```
 
@@ -228,8 +251,24 @@ plant/{MAC}/log       # 远程日志输出
 }
 ```
 
+**补光灯状态 (plant/{MAC}/light)**：
+```json
+// 补光灯开启
+{
+  "state": "on",
+  "r": 255,
+  "g": 0,
+  "b": 128
+}
+
+// 补光灯关闭
+{
+  "state": "off"
+}
+```
+
 字段说明：
-- `msg_id` — 命令消息 ID，用于关联请求和响应
+- `msg_id` — 命令消息 ID，格式 `{MAC}_{timestamp}`，用于关联请求和响应
 - `action_reply` — 响应类型（`capture` 或 `water`）
 - **capture 响应**：
   - `data.url` — 上传后的图片 URL
@@ -239,11 +278,15 @@ plant/{MAC}/log       # 远程日志输出
 - **water 响应**：
   - `data.duration` — 实际浇水时长（秒）
   - `data.success` — 是否执行成功
+- **light 状态**（发布到 `plant/{MAC}/light`）：
+  - `state` — `"on"` 或 `"off"`
+  - `r`、`g`、`b` — 补光灯颜色（仅 `state: "on"` 时包含）
 
 ### 数据发布策略
 
 - 每个整点（xx:00）和半点（xx:30）自动发布传感器数据
 - 收到控制命令后立即执行并反馈结果
+- 补光灯状态变更时立即发布到 `plant/{MAC}/light`
 - 设备上线/离线通过 LWT 机制自动通知
 
 ## AI 工具列表
