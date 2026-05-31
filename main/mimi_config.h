@@ -176,8 +176,14 @@
 
 /* 土壤湿度告警 */
 #define MIMI_SOIL_ALARM_THRESHOLD    20.0f
+#define MIMI_SOIL_AUTO_WATER_THRESHOLD 10.0f
+#define MIMI_SOIL_AUTO_WATER_DURATION_S 5
+#define MIMI_SOIL_AUTO_WATER_R       0
+#define MIMI_SOIL_AUTO_WATER_G       100
+#define MIMI_SOIL_AUTO_WATER_B       255
 #define MIMI_NVS_SOIL_ALARM          "soil_alarm"
 #define MIMI_NVS_KEY_SOIL_ALERTED    "alerted"
+#define MIMI_NVS_KEY_SOIL_WATERED    "watered"
 #define MIMI_NVS_KEY_API_KEY         "api_key"
 #define MIMI_NVS_KEY_TAVILY_KEY      "tavily_key"
 #define MIMI_NVS_KEY_MODEL           "model"

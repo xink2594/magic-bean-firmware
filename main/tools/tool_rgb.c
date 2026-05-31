@@ -1,5 +1,6 @@
 #include "tools/tool_registry.h"
 #include "tools/tool_rgb.h"
+#include "mimi_config.h"
 #include "led_strip.h"
 #include "esp_log.h"
 #include "cJSON.h"
@@ -15,10 +16,10 @@ static const char *TAG = "tool_rgb";
 #define WS2812_COUNT  22
 #define WATER_CHUNK    6
 #define ANIM_INTERVAL_MS  120
-#define WATER_DEFAULT_DURATION_S  5
-#define WATER_DEFAULT_R  0
-#define WATER_DEFAULT_G  100
-#define WATER_DEFAULT_B  255
+#define WATER_DEFAULT_DURATION_S  MIMI_SOIL_AUTO_WATER_DURATION_S
+#define WATER_DEFAULT_R  MIMI_SOIL_AUTO_WATER_R
+#define WATER_DEFAULT_G  MIMI_SOIL_AUTO_WATER_G
+#define WATER_DEFAULT_B  MIMI_SOIL_AUTO_WATER_B
 
 typedef enum { LED_OFF, LED_GROW_LIGHT, LED_WATER_FLOW } led_mode_t;
 

@@ -431,6 +431,64 @@ static void check_soil_moisture_alarm(float soil_moisture)
     }
 }
 
+static void check_soil_moisture_auto_water(float soil_moisture)
+{
+    if (soil_moisture == SENSOR_INVALID_VALUE) {
+        return;
+    }
+
+    /* 读取当前自动浇水状态 */
+    bool watered = false;
+    nvs_handle_t nvs;
+    if (nvs_open(MIMI_NVS_SOIL_ALARM, NVS_READONLY, &nvs) == ESP_OK) {
+        uint8_t val = 0;
+        if (nvs_get_u8(nvs, MIMI_NVS_KEY_SOIL_WATERED, &val) == ESP_OK) {
+            watered = (val != 0);
+        }
+        nvs_close(nvs);
+    }
+
+    if (soil_moisture < MIMI_SOIL_AUTO_WATER_THRESHOLD) {
+        if (!watered) {
+            /* 启动流水动画模拟浇水 */
+            esp_err_t err = tool_rgb_water_flow_start(
+                MIMI_SOIL_AUTO_WATER_R, MIMI_SOIL_AUTO_WATER_G, MIMI_SOIL_AUTO_WATER_B,
+                MIMI_SOIL_AUTO_WATER_DURATION_S);
+            if (err == ESP_OK) {
+                ESP_LOGW(TAG, "Auto water triggered: moisture=%.1f%%, flow started for %ds",
+                         soil_moisture, MIMI_SOIL_AUTO_WATER_DURATION_S);
+                /* 标记已浇水 */
+                if (nvs_open(MIMI_NVS_SOIL_ALARM, NVS_READWRITE, &nvs) == ESP_OK) {
+                    nvs_set_u8(nvs, MIMI_NVS_KEY_SOIL_WATERED, 1);
+                    nvs_commit(nvs);
+                    nvs_close(nvs);
+                }
+                /* 发送飞书通知 */
+                if (s_admin_id[0] != '\0') {
+                    char msg[128];
+                    snprintf(msg, sizeof(msg),
+                             "土壤湿度极低！自动浇水已触发\n当前湿度: %.1f%%，阈值: %.1f%%\n流水动画时长: %d秒",
+                             soil_moisture, MIMI_SOIL_AUTO_WATER_THRESHOLD,
+                             MIMI_SOIL_AUTO_WATER_DURATION_S);
+                    feishu_send_message(s_admin_id, msg);
+                }
+            } else {
+                ESP_LOGE(TAG, "Failed to trigger auto water: %s", esp_err_to_name(err));
+            }
+        } else {
+            ESP_LOGI(TAG, "Auto water already triggered (moisture=%.1f%%), skipping", soil_moisture);
+        }
+    } else if (watered) {
+        /* 湿度恢复，清除浇水标记 */
+        if (nvs_open(MIMI_NVS_SOIL_ALARM, NVS_READWRITE, &nvs) == ESP_OK) {
+            nvs_set_u8(nvs, MIMI_NVS_KEY_SOIL_WATERED, 0);
+            nvs_commit(nvs);
+            nvs_close(nvs);
+        }
+        ESP_LOGI(TAG, "Soil moisture recovered (%.1f%%), auto water flag cleared", soil_moisture);
+    }
+}
+
 static void data_publish_task(void *arg)
 {
     (void)arg;
@@ -454,6 +512,9 @@ static void data_publish_task(void *arg)
                     mqtt_sensor_data_t alarm_data;
                     read_sensor_data(&alarm_data);
                     check_soil_moisture_alarm(alarm_data.dirt_humidity);
+
+                    /* 土壤湿度自动浇水检查 */
+                    check_soil_moisture_auto_water(alarm_data.dirt_humidity);
 
                     last_slot_key = slot_key;
                 }
